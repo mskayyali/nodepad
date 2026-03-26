@@ -459,7 +459,8 @@ export function GraphArea({
               {linksRef.current.map((link, i) => {
                 const s = link.source as SimNode
                 const t = link.target as SimNode
-                if (s.x == null || t.x == null) return null
+                if (s.x == null || s.y == null || t.x == null || t.y == null) return null
+                const [sx, sy, tx2, ty2] = [s.x, s.y, t.x, t.y]
 
                 const isSynth = (link as SimLink).isSynthesisLink
                 const dimmed = focalId != null &&
@@ -467,8 +468,8 @@ export function GraphArea({
                 const highlighted = focalId != null && !dimmed && !isSynth
 
                 const d = isSynth
-                  ? `M ${s.x} ${s.y} L ${t.x} ${t.y}`
-                  : arcPath(s.x, s.y, t.x, t.y, cx, cy)
+                  ? `M ${sx} ${sy} L ${tx2} ${ty2}`
+                  : arcPath(sx, sy, tx2, ty2, cx, cy)
 
                 return (
                   <path
