@@ -1,7 +1,7 @@
 "use client"
 
 import { detectContentType } from "@/lib/detect-content-type"
-import { loadAIConfig, type AIConfig } from "@/lib/ai-settings"
+import { loadAIConfig, getBaseUrl, getProviderHeaders } from "@/lib/ai-settings"
 import type { ContentType } from "@/lib/content-types"
 
 // ── Language detection ────────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ const JSON_SCHEMA = {
       },
       category:           { type: "string" },
       annotation:         { type: "string" },
-      confidence:         { type: ["number", "null"] },
+      confidence:         { type: "number", nullable: true },
       influencedByIndices: {
         type: "array",
         items: { type: "number" },
@@ -99,7 +99,8 @@ const JSON_SCHEMA = {
         description: "True if the note is completely unrelated",
       },
       mergeWithIndex: {
-        type: ["number", "null"],
+        type: "number",
+        nullable: true,
         description: "Index of an existing note to merge into",
       },
     },
@@ -163,11 +164,18 @@ export async function enrichBlockClient(
     model = `${model}:online`
   }
 
+  const supportsJsonSchema = config.provider === "openrouter" || config.provider === "openai"
+
   const groundingNote = shouldGround
     ? `\n\n## Source Citations (grounded search active)
 You have live web access. For this note type, include 1–2 real source citations by name, publication, and year. Do NOT generate URLs — reference by title and author only (e.g. "Per *Science*, 2023, Doe et al."). Only cite sources you have actually retrieved.`
     : ""
-  const systemPrompt = SYSTEM_PROMPT + groundingNote
+
+  const schemaHint = !supportsJsonSchema
+    ? `\n\n## Output Format — CRITICAL\nYou MUST respond with a single JSON object (no markdown, no explanation). Schema:\n${JSON.stringify(JSON_SCHEMA.schema, null, 2)}`
+    : ""
+
+  const systemPrompt = SYSTEM_PROMPT + groundingNote + schemaHint
 
   const categoryContext = category
     ? `\n\nThe user has assigned this note the category "${category}".`
@@ -211,35 +219,45 @@ You have live web access. For this note type, include 1–2 real source citation
   const langDirective = `[RESPOND IN: ${language}]\n`
   const userMessage = `${langDirective}<note_to_enrich>${safeText}</note_to_enrich>${urlContext}${categoryContext}${forcedTypeContext}${globalContext}`
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const baseUrl = getBaseUrl(config)
+  const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${config.apiKey}`,
-      "HTTP-Referer": "https://nodepad.space",
-      "X-Title": "nodepad",
-    },
+    headers: getProviderHeaders(config),
     body: JSON.stringify({
       model,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user",   content: userMessage },
       ],
-      response_format: { type: "json_schema", json_schema: JSON_SCHEMA },
+      response_format: supportsJsonSchema
+        ? { type: "json_schema", json_schema: JSON_SCHEMA }
+        : { type: "json_object" },
       temperature: 0.1,
     }),
   })
 
   if (!response.ok) {
     const err = await response.text()
-    throw new Error(`OpenRouter enrich error ${response.status}: ${err}`)
+    throw new Error(`AI enrich error (${config.provider}) ${response.status}: ${err}`)
   }
 
   const data = await response.json()
   const content = data.choices?.[0]?.message?.content
-  if (!content) throw new Error("No content in OpenRouter response")
+  if (!content) throw new Error("No content in AI response")
 
-  const result: EnrichResult = JSON.parse(content)
+  let result: EnrichResult
+  try {
+    result = JSON.parse(content)
+  } catch {
+    const fenceMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/)
+    if (fenceMatch) {
+      result = JSON.parse(fenceMatch[1].trim())
+    } else {
+      throw new Error(
+        `AI returned invalid JSON. The model may not support structured output.\n\nRaw response: ${content.substring(0, 200)}`
+      )
+    }
+  }
   if (result.confidence != null) {
     result.confidence = Math.min(100, Math.max(0, Math.round(result.confidence)))
   }

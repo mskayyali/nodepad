@@ -1,6 +1,6 @@
 "use client"
 
-import { loadAIConfig } from "@/lib/ai-settings"
+import { loadAIConfig, getBaseUrl, getProviderHeaders } from "@/lib/ai-settings"
 
 export interface GhostContext {
   text: string
@@ -50,14 +50,10 @@ ${context.map(c =>
 Return ONLY valid JSON:
 {"text": "...", "category": "..."}`
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const baseUrl = getBaseUrl(config)
+  const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${config.apiKey}`,
-      "HTTP-Referer": "https://nodepad.space",
-      "X-Title": "nodepad",
-    },
+    headers: getProviderHeaders(config),
     body: JSON.stringify({
       model,
       messages: [{ role: "user", content: prompt }],
@@ -68,12 +64,12 @@ Return ONLY valid JSON:
 
   if (!response.ok) {
     const err = await response.text()
-    throw new Error(`OpenRouter ghost error ${response.status}: ${err}`)
+    throw new Error(`AI ghost error (${config.provider}) ${response.status}: ${err}`)
   }
 
   const data = await response.json()
   const rawContent = data.choices?.[0]?.message?.content
-  if (!rawContent) throw new Error("No content in OpenRouter response")
+  if (!rawContent) throw new Error("No content in AI response")
 
   // Defensive parse
   try {

@@ -177,7 +177,7 @@ export function AboutPanel({ open, onClose }: AboutPanelProps) {
           <Section title="Quick start">
             <div className="space-y-4">
               <Step n={1} title="Add your API key">
-                Open the sidebar (menu button top-left) → Settings → paste your OpenRouter API key. Free to sign up at openrouter.ai. Without a key the app works but AI enrichment is disabled.
+                Open the sidebar (menu button top-left) → Settings → choose your provider and paste your API key. OpenRouter offers free credits at openrouter.ai. Without a key the app works but AI enrichment is disabled.
               </Step>
               <Step n={2} title="Capture anything">
                 Type a thought, paste a quote, drop a URL, or write a question into the input bar at the bottom and press Enter. nodepad classifies it automatically.

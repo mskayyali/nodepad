@@ -17,9 +17,15 @@ import {
   Eye,
   EyeOff,
   Save,
-  FolderInput
+  FolderInput,
+  Link,
 } from "lucide-react"
-import { AI_MODELS, type AISettings } from "@/lib/ai-settings"
+import {
+  AI_PROVIDER_PRESETS,
+  getModelsForProvider,
+  getPreset,
+  type AISettings,
+} from "@/lib/ai-settings"
 
 interface Project {
   id: string
@@ -66,6 +72,7 @@ export function ProjectSidebar({
   const [showSettings, setShowSettings] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [modelOpen, setModelOpen] = useState(false)
+  const [providerOpen, setProviderOpen] = useState(false)
   // local draft for settings (only save on "Save")
   const [draft, setDraft] = useState<AISettings>(aiSettings)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -105,7 +112,10 @@ export function ProjectSidebar({
     setShowSettings(false)
   }
 
-  const selectedModel = AI_MODELS.find(m => m.id === draft.modelId) || AI_MODELS[0]
+  const currentPreset = getPreset(draft.provider)
+  const models = getModelsForProvider(draft.provider)
+  const selectedModel = models.find(m => m.id === draft.modelId) || models[0] || undefined
+  const isCustomProvider = draft.provider === "custom"
 
   return (
     <div
@@ -268,10 +278,86 @@ export function ProjectSidebar({
                 transition={{ duration: 0.15 }}
                 className="absolute inset-0 overflow-y-auto px-3 py-4 flex flex-col gap-5 custom-scrollbar"
               >
+                {/* Provider Selector */}
+                <div className="flex flex-col gap-2">
+                  <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                    Provider
+                  </label>
+                  <div className="relative">
+                    <button
+                      onClick={() => setProviderOpen(v => !v)}
+                      className="flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-left hover:bg-white/[0.07] focus:outline-none transition-colors"
+                    >
+                      <span className="font-mono text-[11px] font-bold text-foreground">{currentPreset.label}</span>
+                      <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${providerOpen ? "rotate-180" : ""}`} />
+                    </button>
+                    <AnimatePresence>
+                      {providerOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          transition={{ duration: 0.1 }}
+                          className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-xl"
+                        >
+                          {AI_PROVIDER_PRESETS.map(preset => (
+                            <button
+                              key={preset.id}
+                              onClick={() => {
+                                const newModels = getModelsForProvider(preset.id)
+                                setDraft(d => ({
+                                  ...d,
+                                  provider: preset.id,
+                                  modelId: newModels[0]?.id ?? d.modelId,
+                                  webGrounding: preset.id === "openrouter" ? d.webGrounding : false,
+                                  customBaseUrl: preset.id === "zai" ? (d.customBaseUrl || preset.baseUrl) : preset.id === "custom" ? d.customBaseUrl : "",
+                                }))
+                                setProviderOpen(false)
+                              }}
+                              className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
+                            >
+                              <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                                draft.provider === preset.id ? "border-primary bg-primary/20" : "border-white/10"
+                              }`}>
+                                {draft.provider === preset.id && <Check className="h-2.5 w-2.5 text-primary" />}
+                              </div>
+                              <span className="font-mono text-[10px] font-bold text-foreground">{preset.label}</span>
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+
+                {/* Custom Base URL */}
+                {(isCustomProvider || draft.provider === "zai") && (
+                  <div className="flex flex-col gap-2">
+                    <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                      Base URL
+                    </label>
+                    <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                      <Link className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <input
+                        type="url"
+                        value={draft.customBaseUrl}
+                        onChange={e => setDraft(d => ({ ...d, customBaseUrl: e.target.value }))}
+                        placeholder="https://api.example.com/v1"
+                        className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                    <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
+                      Must be OpenAI-compatible (supports /chat/completions).
+                    </p>
+                  </div>
+                )}
+
                 {/* API Key */}
                 <div className="flex flex-col gap-2">
                   <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                    OpenRouter API Key
+                    API Key
                   </label>
                   <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
                     <Key className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -279,7 +365,7 @@ export function ProjectSidebar({
                       type={showKey ? "text" : "password"}
                       value={draft.apiKey}
                       onChange={e => setDraft(d => ({ ...d, apiKey: e.target.value }))}
-                      placeholder="sk-or-v1-..."
+                      placeholder={currentPreset.keyPlaceholder || "Your API key"}
                       className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
                       autoComplete="off"
                       spellCheck={false}
@@ -290,10 +376,12 @@ export function ProjectSidebar({
                   </div>
                   <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
                     Stored locally. Never sent to a server.{" "}
-                    <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer"
-                      className="text-primary underline hover:brightness-125 transition-all">
-                      Get a key →
-                    </a>
+                    {currentPreset.keyUrl && (
+                      <a href={currentPreset.keyUrl} target="_blank" rel="noopener noreferrer"
+                        className="text-primary underline hover:brightness-125 transition-all">
+                        Get a key →
+                      </a>
+                    )}
                   </p>
                 </div>
 
@@ -302,76 +390,92 @@ export function ProjectSidebar({
                   <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
                     Model
                   </label>
-                  <div className="relative">
-                    <button
-                      onClick={() => setModelOpen(v => !v)}
-                      className="flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-left hover:bg-white/[0.07] focus:outline-none transition-colors"
-                    >
-                      <div>
-                        <div className="font-mono text-[11px] font-bold text-foreground">{selectedModel.label}</div>
-                        <div className="font-mono text-[9px] text-muted-foreground mt-0.5">{selectedModel.description}</div>
-                      </div>
-                      <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${modelOpen ? "rotate-180" : ""}`} />
-                    </button>
-                    <AnimatePresence>
-                      {modelOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -4 }}
-                          transition={{ duration: 0.1 }}
-                          className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-xl"
-                        >
-                          {AI_MODELS.map(model => (
-                            <button
-                              key={model.id}
-                              onClick={() => {
-                                setDraft(d => ({ ...d, modelId: model.id, webGrounding: model.supportsGrounding ? d.webGrounding : false }))
-                                setModelOpen(false)
-                              }}
-                              className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
-                            >
-                              <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                                draft.modelId === model.id ? "border-primary bg-primary/20" : "border-white/10"
-                              }`}>
-                                {draft.modelId === model.id && <Check className="h-2.5 w-2.5 text-primary" />}
-                              </div>
-                              <div>
-                                <div className="font-mono text-[10px] font-bold text-foreground">{model.label}</div>
-                                <div className="font-mono text-[9px] text-muted-foreground">{model.description}</div>
-                              </div>
-                              {model.supportsGrounding && <Globe className="ml-auto h-3 w-3 shrink-0 text-primary/50" />}
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+                  {isCustomProvider || models.length === 0 ? (
+                    <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                      <input
+                        type="text"
+                        value={draft.modelId}
+                        onChange={e => setDraft(d => ({ ...d, modelId: e.target.value }))}
+                        placeholder="e.g. gpt-4o, claude-3-opus-20240229"
+                        className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <button
+                        onClick={() => setModelOpen(v => !v)}
+                        className="flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-left hover:bg-white/[0.07] focus:outline-none transition-colors"
+                      >
+                        <div>
+                          <div className="font-mono text-[11px] font-bold text-foreground">{selectedModel?.label ?? draft.modelId}</div>
+                          <div className="font-mono text-[9px] text-muted-foreground mt-0.5">{selectedModel?.description ?? "Custom model ID"}</div>
+                        </div>
+                        <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${modelOpen ? "rotate-180" : ""}`} />
+                      </button>
+                      <AnimatePresence>
+                        {modelOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            transition={{ duration: 0.1 }}
+                            className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-xl"
+                          >
+                            {models.map(model => (
+                              <button
+                                key={model.id}
+                                onClick={() => {
+                                  setDraft(d => ({ ...d, modelId: model.id, webGrounding: model.supportsGrounding ? d.webGrounding : false }))
+                                  setModelOpen(false)
+                                }}
+                                className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
+                              >
+                                <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                                  draft.modelId === model.id ? "border-primary bg-primary/20" : "border-white/10"
+                                }`}>
+                                  {draft.modelId === model.id && <Check className="h-2.5 w-2.5 text-primary" />}
+                                </div>
+                                <div>
+                                  <div className="font-mono text-[10px] font-bold text-foreground">{model.label}</div>
+                                  <div className="font-mono text-[9px] text-muted-foreground">{model.description}</div>
+                                </div>
+                                {model.supportsGrounding && draft.provider === "openrouter" && <Globe className="ml-auto h-3 w-3 shrink-0 text-primary/50" />}
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
                 </div>
 
-                {/* Web Grounding */}
-                <div className="flex items-start justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2.5">
-                  <div className="flex items-start gap-2">
-                    <Globe className="h-3.5 w-3.5 mt-0.5 text-primary/60 shrink-0" />
-                    <div>
-                      <div className="font-mono text-[11px] font-bold text-foreground">Web Grounding</div>
-                      <div className="font-mono text-[9px] text-muted-foreground mt-0.5 leading-relaxed">
-                        {selectedModel.supportsGrounding ? "Adds :online for live search" : "Not available for this model"}
+                {/* Web Grounding (only for OpenRouter) */}
+                {draft.provider === "openrouter" && selectedModel && (
+                  <div className="flex items-start justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2.5">
+                    <div className="flex items-start gap-2">
+                      <Globe className="h-3.5 w-3.5 mt-0.5 text-primary/60 shrink-0" />
+                      <div>
+                        <div className="font-mono text-[11px] font-bold text-foreground">Web Grounding</div>
+                        <div className="font-mono text-[9px] text-muted-foreground mt-0.5 leading-relaxed">
+                          {selectedModel.supportsGrounding ? "Adds :online for live search" : "Not available for this model"}
+                        </div>
                       </div>
                     </div>
+                    <button
+                      onClick={() => selectedModel.supportsGrounding && setDraft(d => ({ ...d, webGrounding: !d.webGrounding }))}
+                      disabled={!selectedModel.supportsGrounding}
+                      className={`relative shrink-0 h-5 w-9 rounded-full transition-all duration-200 ${
+                        draft.webGrounding && selectedModel.supportsGrounding ? "bg-primary" : "bg-white/10"
+                      } disabled:opacity-30 disabled:cursor-not-allowed`}
+                    >
+                      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${
+                        draft.webGrounding && selectedModel.supportsGrounding ? "left-5" : "left-0.5"
+                      }`} />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => selectedModel.supportsGrounding && setDraft(d => ({ ...d, webGrounding: !d.webGrounding }))}
-                    disabled={!selectedModel.supportsGrounding}
-                    className={`relative shrink-0 h-5 w-9 rounded-full transition-all duration-200 ${
-                      draft.webGrounding && selectedModel.supportsGrounding ? "bg-primary" : "bg-white/10"
-                    } disabled:opacity-30 disabled:cursor-not-allowed`}
-                  >
-                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${
-                      draft.webGrounding && selectedModel.supportsGrounding ? "left-5" : "left-0.5"
-                    }`} />
-                  </button>
-                </div>
+                )}
 
                 {/* API Status */}
                 <div className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${
@@ -380,7 +484,7 @@ export function ProjectSidebar({
                     : "bg-white/5 border border-white/5 text-muted-foreground"
                 }`}>
                   <span className={`h-1.5 w-1.5 rounded-full ${draft.apiKey ? "bg-primary animate-pulse" : "bg-white/30"}`} />
-                  {draft.apiKey ? "API key configured" : "No API key — AI disabled"}
+                  {draft.apiKey ? `${currentPreset.label} — API key configured` : "No API key — AI disabled"}
                 </div>
               </motion.div>
             )}
