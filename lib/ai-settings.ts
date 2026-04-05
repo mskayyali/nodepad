@@ -93,41 +93,10 @@ export const AI_MODELS: AIModel[] = [
   },
 ]
 
-export const OPENAI_MODELS: AIModel[] = [
-  {
-    id: "gpt-4o",
-    label: "GPT-4o",
-    shortLabel: "GPT-4o",
-    description: "Strong structured output, broad knowledge",
-    supportsGrounding: false,
-  },
-  {
-    id: "gpt-4.1",
-    label: "GPT-4.1",
-    shortLabel: "GPT-4.1",
-    description: "Latest GPT-4, improved instruction following",
-    supportsGrounding: false,
-  },
-  {
-    id: "gpt-4.1-mini",
-    label: "GPT-4.1 Mini",
-    shortLabel: "GPT-4.1 Mini",
-    description: "Fast and capable, good balance",
-    supportsGrounding: false,
-  },
-  {
-    id: "o4-mini",
-    label: "o4-mini",
-    shortLabel: "o4-mini",
-    description: "Fast reasoning model",
-    supportsGrounding: false,
-  },
-]
-
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
   switch (provider) {
     case "openrouter": return AI_MODELS
-    case "openai":     return OPENAI_MODELS
+    case "openai":     return []
     case "zai":        return []
     case "custom":     return []
   }

@@ -131,6 +131,7 @@ export function ProjectSidebar({
   const models = getModelsForProvider(draft.provider)
   const selectedModel = models.find(m => m.id === draft.modelId) || models[0] || undefined
   const isCustomProvider = draft.provider === "custom"
+  const useOpenModelInput = draft.provider === "openai" || isCustomProvider || draft.provider === "zai" || models.length === 0
 
   return (
     <div
@@ -319,16 +320,17 @@ export function ProjectSidebar({
                             <button
                               key={preset.id}
                               onClick={() => {
-                                const newModels = getModelsForProvider(preset.id)
-                                const validModelId = newModels.length > 0 ? (newModels[0]?.id ?? d.modelId) : d.modelId
                                 setDraft(d => ({
                                   ...d,
                                   provider: preset.id,
-                                  modelId: validModelId,
+                                  modelId: preset.id === "openrouter"
+                                    ? (d.modelId || getModelsForProvider("openrouter")[0]?.id || d.modelId)
+                                    : d.modelId.replace(/^openai\//, ""),
                                   webGrounding: preset.id === "openrouter" ? d.webGrounding : false,
                                   customBaseUrl: preset.id === "zai" ? preset.baseUrl : preset.id === "custom" ? d.customBaseUrl : "",
                                 }))
                                 setProviderOpen(false)
+                                setModelOpen(false)
                               }}
                               className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
                             >
@@ -409,13 +411,15 @@ export function ProjectSidebar({
                   <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
                     Model
                   </label>
-                  {isCustomProvider || models.length === 0 ? (
+                  {useOpenModelInput ? (
                     <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
                       <input
                         type="text"
                         value={draft.modelId}
                         onChange={e => setDraft(d => ({ ...d, modelId: e.target.value }))}
-                        placeholder="e.g. gpt-4o, claude-3-opus-20240229"
+                        placeholder={draft.provider === "openai"
+                          ? "e.g. gpt-4.1, gpt-4o, o4-mini"
+                          : "e.g. gpt-4o, claude-3-opus-20240229"}
                         className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
                         autoComplete="off"
                         spellCheck={false}
