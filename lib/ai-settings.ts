@@ -222,16 +222,6 @@ export async function proxyChatCompletion(
   // The proxy returns the upstream status code and JSON body
   return res
 }
-  const base: Record<string, string> = {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${config.apiKey}`,
-  }
-  if (config.provider === "openrouter") {
-    base["HTTP-Referer"] = "https://nodepad.space"
-    base["X-Title"] = "nodepad"
-  }
-  return base
-}
 
 /** Validate a custom base URL. Returns an error message or null if valid. */
 export function validateCustomBaseUrl(url: string): string | null {
