@@ -88,7 +88,7 @@ const JSON_SCHEMA = {
       },
       category:           { type: "string" },
       annotation:         { type: "string" },
-      confidence:         { type: "number", nullable: true },
+      confidence:         { type: ["number", "null"] },
       influencedByIndices: {
         type: "array",
         items: { type: "number" },
@@ -99,8 +99,7 @@ const JSON_SCHEMA = {
         description: "True if the note is completely unrelated",
       },
       mergeWithIndex: {
-        type: "number",
-        nullable: true,
+        type: ["number", "null"],
         description: "Index of an existing note to merge into",
       },
     },

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useCallback } from "react"
 
 export interface AIModel {
   id: string
@@ -285,12 +285,10 @@ function isBlockedHost(rawUrl: string): boolean {
 export function getAIHeaders(): Record<string, string> {
   const config = loadAIConfig()
   if (!config) return {}
-  const models = getModelsForProvider(config.provider)
-  const model = models.find(m => m.id === config.modelId) || AI_MODELS.find(m => m.id === DEFAULT_MODEL_ID)!
   return {
     "x-or-key": config.apiKey,
     "x-or-model": config.modelId,
-    "x-or-supports-grounding": model.supportsGrounding ? "true" : "false",
+    "x-or-supports-grounding": config.supportsGrounding ? "true" : "false",
   }
 }
 

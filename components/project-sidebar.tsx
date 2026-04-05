@@ -111,6 +111,10 @@ export function ProjectSidebar({
 
   const handleSaveSettings = () => {
     const needsCustomUrl = draft.provider === "custom" || draft.provider === "zai"
+    if (draft.provider === "custom" && !draft.customBaseUrl.trim()) {
+      setUrlError("Base URL is required for the custom provider")
+      return
+    }
     if (needsCustomUrl && draft.customBaseUrl) {
       const error = validateCustomBaseUrl(draft.customBaseUrl)
       if (error) {
@@ -316,12 +320,13 @@ export function ProjectSidebar({
                               key={preset.id}
                               onClick={() => {
                                 const newModels = getModelsForProvider(preset.id)
+                                const validModelId = newModels.length > 0 ? (newModels[0]?.id ?? d.modelId) : d.modelId
                                 setDraft(d => ({
                                   ...d,
                                   provider: preset.id,
-                                  modelId: newModels[0]?.id ?? d.modelId,
+                                  modelId: validModelId,
                                   webGrounding: preset.id === "openrouter" ? d.webGrounding : false,
-                                  customBaseUrl: preset.id === "zai" ? (d.customBaseUrl || preset.baseUrl) : preset.id === "custom" ? d.customBaseUrl : "",
+                                  customBaseUrl: preset.id === "zai" ? preset.baseUrl : preset.id === "custom" ? d.customBaseUrl : "",
                                 }))
                                 setProviderOpen(false)
                               }}
