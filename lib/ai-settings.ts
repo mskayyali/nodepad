@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 
 export interface AIModel {
   id: string
@@ -146,16 +146,24 @@ export interface AISettings {
 
 const STORAGE_KEY = "nodepad-ai-settings"
 
+const DEFAULT_SETTINGS: AISettings = {
+  apiKey: "",
+  modelId: DEFAULT_MODEL_ID,
+  webGrounding: false,
+  provider: DEFAULT_PROVIDER,
+  customBaseUrl: "",
+}
+
 function loadSettings(): AISettings {
   if (typeof window === "undefined") {
-    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "" }
+    return DEFAULT_SETTINGS
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "" }
-    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "", ...JSON.parse(raw) }
+    if (!raw) return DEFAULT_SETTINGS
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
   } catch {
-    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "" }
+    return DEFAULT_SETTINGS
   }
 }
 
@@ -293,7 +301,11 @@ export function getAIHeaders(): Record<string, string> {
 }
 
 export function useAISettings() {
-  const [settings, setSettings] = useState<AISettings>(loadSettings)
+  const [settings, setSettings] = useState<AISettings>(DEFAULT_SETTINGS)
+
+  useEffect(() => {
+    setSettings(loadSettings())
+  }, [])
 
   const updateSettings = useCallback((patch: Partial<AISettings>) => {
     setSettings(prev => {
