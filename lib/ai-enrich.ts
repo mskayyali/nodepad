@@ -145,6 +145,71 @@ export interface EnrichResult {
   mergeWithIndex: number | null
 }
 
+function decodeJsonishString(value: string): string {
+  const normalized = value
+    .replace(/\\r/g, "\r")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\"/g, "\"")
+    .replace(/\\\\/g, "\\")
+
+  return normalized.trim()
+}
+
+function extractJsonCandidate(content: string): string | null {
+  const fenceMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/)
+  if (fenceMatch) return fenceMatch[1].trim()
+
+  const start = content.indexOf("{")
+  const end = content.lastIndexOf("}")
+  if (start !== -1 && end !== -1 && end > start) {
+    return content.slice(start, end + 1).trim()
+  }
+
+  return null
+}
+
+function coerceLooseEnrichResult(content: string): EnrichResult | null {
+  const contentTypeMatch = content.match(/"contentType"\s*:\s*"([^"]+)"/)
+  const categoryMatch = content.match(/"category"\s*:\s*"([^"]+)"/)
+  const annotationMatch = content.match(
+    /"annotation"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"(?:confidence|influencedByIndices|isUnrelated|mergeWithIndex)"|\s*$)/
+  )
+
+  if (!contentTypeMatch || !categoryMatch || !annotationMatch) return null
+
+  const confidenceRaw = content.match(/"confidence"\s*:\s*(null|-?\d+(?:\.\d+)?)/)?.[1]
+  const influencedRaw = content.match(/"influencedByIndices"\s*:\s*\[([^\]]*)\]/)?.[1]
+  const isUnrelatedRaw = content.match(/"isUnrelated"\s*:\s*(true|false)/)?.[1]
+  const mergeRaw = content.match(/"mergeWithIndex"\s*:\s*(null|-?\d+)/)?.[1]
+
+  const influencedByIndices = influencedRaw
+    ? influencedRaw
+        .split(",")
+        .map(part => Number(part.trim()))
+        .filter(Number.isFinite)
+    : []
+
+  return {
+    contentType: contentTypeMatch[1] as ContentType,
+    category: decodeJsonishString(categoryMatch[1]),
+    annotation: decodeJsonishString(annotationMatch[1]),
+    confidence: confidenceRaw == null || confidenceRaw === "null" ? null : Number(confidenceRaw),
+    influencedByIndices,
+    isUnrelated: isUnrelatedRaw === "true",
+    mergeWithIndex: mergeRaw == null || mergeRaw === "null" ? null : Number(mergeRaw),
+  }
+}
+
+function parseEnrichResult(content: string): EnrichResult | null {
+  const candidate = extractJsonCandidate(content) ?? content.trim()
+  try {
+    return JSON.parse(candidate) as EnrichResult
+  } catch {
+    return coerceLooseEnrichResult(candidate)
+  }
+}
+
 export async function enrichBlockClient(
   text: string,
   context: EnrichContext[],
@@ -247,18 +312,13 @@ You have live web access. For this note type, include 1–2 real source citation
   const content = data.choices?.[0]?.message?.content
   if (!content) throw new Error("No content in AI response")
 
-  let result: EnrichResult
-  try {
-    result = JSON.parse(content)
-  } catch {
-    const fenceMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/)
-    if (fenceMatch) {
-      result = JSON.parse(fenceMatch[1].trim())
-    } else {
-      throw new Error(
-        `AI returned invalid JSON. The model may not support structured output.\n\nRaw response: ${content.substring(0, 200)}`
-      )
-    }
+  const finishReason = data.choices?.[0]?.finish_reason
+  const result = parseEnrichResult(content)
+  if (!result) {
+    const finishReasonNote = finishReason ? ` Finish reason: ${finishReason}.` : ""
+    throw new Error(
+      `AI returned invalid JSON.${finishReasonNote} The model may not support structured output.\n\nRaw response: ${content.substring(0, 200)}`
+    )
   }
   if (result.confidence != null) {
     result.confidence = Math.min(100, Math.max(0, Math.round(result.confidence)))
