@@ -39,7 +39,8 @@ const nextConfig = {
             // - script-src: Next.js needs 'unsafe-inline' + 'unsafe-eval' in dev;
             //   nonces are the proper fix but require custom server — this is the
             //   pragmatic baseline for a static/Vercel deployment.
-            // - connect-src: allow OpenRouter API calls from the browser (grounding links)
+            // - connect-src: allowlisted AI provider API calls from the browser;
+            //   custom providers are handled at runtime via <meta> CSP injection
             // - img-src: data URIs for inline images, blob for canvas exports
             // - style-src unsafe-inline: Tailwind injects inline styles at runtime
             key: "Content-Security-Policy",
@@ -47,7 +48,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cloud.umami.is",
               "style-src 'self' 'unsafe-inline'",
-              "connect-src 'self' https://openrouter.ai https://cloud.umami.is https://api-gateway.umami.dev",
+              "connect-src 'self' https://openrouter.ai https://api.openai.com https://api.z.ai https://cloud.umami.is https://api-gateway.umami.dev",
               "img-src 'self' data: blob: https://i.ytimg.com",
               "font-src 'self' data:",
               "frame-src https://www.youtube-nocookie.com https://www.youtube.com",
