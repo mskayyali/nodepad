@@ -40,7 +40,7 @@ const nextConfig = {
             //   nonces are the proper fix but require custom server — this is the
             //   pragmatic baseline for a static/Vercel deployment.
             // - connect-src: allowlisted AI provider API calls from the browser;
-            //   custom providers are handled at runtime via <meta> CSP injection
+            //   custom providers are proxied through /api/ai-proxy to stay within CSP
             // - img-src: data URIs for inline images, blob for canvas exports
             // - style-src unsafe-inline: Tailwind injects inline styles at runtime
             key: "Content-Security-Policy",

@@ -170,6 +170,7 @@ export interface AIConfig {
 export function loadAIConfig(): AIConfig | null {
   const s = loadSettings()
   if (!s.apiKey) return null
+  if (!s.modelId) return null
   const models = getModelsForProvider(s.provider)
   const model = models.find(m => m.id === s.modelId)
   const modelId = s.modelId || (models[0]?.id ?? DEFAULT_MODEL_ID)
@@ -184,7 +185,43 @@ export function getBaseUrl(config: AIConfig): string {
   return getPreset(config.provider).baseUrl
 }
 
+/** Whether this provider should route through the server proxy (custom/zai)
+ *  to stay within CSP connect-src. */
+export function shouldUseProxy(config: AIConfig): boolean {
+  return (config.provider === "custom" || config.provider === "zai") && !!config.customBaseUrl
+}
+
 export function getProviderHeaders(config: AIConfig): Record<string, string> {
+  const base: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${config.apiKey}`,
+  }
+  if (config.provider === "openrouter") {
+    base["HTTP-Referer"] = "https://nodepad.space"
+    base["X-Title"] = "nodepad"
+  }
+  return base
+}
+
+/** Proxied chat/completion fetch for custom/zai providers.
+ *  Sends the request through /api/ai-proxy to stay within CSP 'self'. */
+export async function proxyChatCompletion(
+  config: AIConfig,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const baseUrl = getBaseUrl(config)
+  const res = await fetch("/api/ai-proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      baseUrl,
+      body,
+      headers: getProviderHeaders(config),
+    }),
+  })
+  // The proxy returns the upstream status code and JSON body
+  return res
+}
   const base: Record<string, string> = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${config.apiKey}`,
@@ -207,33 +244,50 @@ export function validateCustomBaseUrl(url: string): string | null {
     if (!parsed.hostname.includes(".")) {
       return "URL must include a valid hostname"
     }
+    if (isBlockedHost(url)) {
+      return "Private and local addresses are not allowed"
+    }
     return null
   } catch {
     return "Invalid URL format"
   }
 }
 
-/** Inject a custom domain into the runtime CSP connect-src directive.
- *  Required for custom providers whose base URL isn't in the static allowlist. */
-export function injectCspForCustomUrl(baseUrl: string): void {
-  if (typeof document === "undefined") return
-  try {
-    const origin = new URL(baseUrl).origin
-    // Remove any previous custom-inject tag
-    document.querySelector('meta[csp-custom-inject]')?.remove()
-    const meta = document.createElement("meta")
-    meta.setAttribute("http-equiv", "Content-Security-Policy")
-    meta.setAttribute("content", `connect-src ${origin}`)
-    meta.setAttribute("csp-custom-inject", "")
-    document.head.appendChild(meta)
-  } catch {
-    // Invalid URL — nothing to inject
+/** Return a provider-specific debugging hint for API errors. */
+export function getProviderErrorHint(provider: AIProvider): string {
+  if (provider === "custom" || provider === "zai") {
+    return " Check your base URL and model name — the endpoint must be OpenAI-compatible (/chat/completions)."
   }
+  return ""
 }
 
-/** Remove any runtime CSP injection for custom providers. */
-export function removeCustomCspInjection(): void {
-  document.querySelector('meta[csp-custom-inject]')?.remove()
+/** Block private/reserved IP ranges and special hostnames (mirrors fetch-url SSRF protection). */
+function isBlockedHost(rawUrl: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(rawUrl)
+  } catch {
+    return true
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return true
+  const h = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "")
+  if (h === "localhost") return true
+  if (h === "metadata.google.internal") return true
+  if (h === "::1" || h === "0:0:0:0:0:0:0:1") return true
+  if (h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd")) return true
+  const ipv4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (ipv4) {
+    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])]
+    if (a === 0) return true
+    if (a === 10) return true
+    if (a === 127) return true
+    if (a === 169 && b === 254) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 192 && b === 168) return true
+    if (a === 100 && b >= 64 && b <= 127) return true
+    if (a >= 224) return true
+  }
+  return false
 }
 
 /** @deprecated Use loadAIConfig() for direct browser → provider calls.

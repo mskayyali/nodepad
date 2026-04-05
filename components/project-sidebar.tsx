@@ -25,8 +25,6 @@ import {
   getModelsForProvider,
   getPreset,
   validateCustomBaseUrl,
-  injectCspForCustomUrl,
-  removeCustomCspInjection,
   type AISettings,
 } from "@/lib/ai-settings"
 
@@ -122,12 +120,6 @@ export function ProjectSidebar({
     }
     setUrlError(null)
     onUpdateAISettings(draft)
-    // Inject CSP rule for custom provider URLs
-    if (needsCustomUrl && draft.customBaseUrl) {
-      injectCspForCustomUrl(draft.customBaseUrl)
-    } else {
-      removeCustomCspInjection()
-    }
     setShowSettings(false)
   }
 

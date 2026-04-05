@@ -1,6 +1,6 @@
 "use client"
 
-import { loadAIConfig, getBaseUrl, getProviderHeaders } from "@/lib/ai-settings"
+import { loadAIConfig, getBaseUrl, getProviderHeaders, shouldUseProxy, proxyChatCompletion, getProviderErrorHint } from "@/lib/ai-settings"
 
 export interface GhostContext {
   text: string
@@ -50,24 +50,24 @@ ${context.map(c =>
 Return ONLY valid JSON:
 {"text": "...", "category": "..."}`
 
-  const baseUrl = getBaseUrl(config)
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: getProviderHeaders(config),
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-    }),
-  })
+  const requestBody = {
+    model,
+    messages: [{ role: "user", content: prompt }],
+    response_format: { type: "json_object" },
+    temperature: 0.7,
+  }
+
+  const response = shouldUseProxy(config)
+    ? await proxyChatCompletion(config, requestBody)
+    : await fetch(`${getBaseUrl(config)}/chat/completions`, {
+        method: "POST",
+        headers: getProviderHeaders(config),
+        body: JSON.stringify(requestBody),
+      })
 
   if (!response.ok) {
     const err = await response.text()
-    const hint = (config.provider === "custom" || config.provider === "zai")
-      ? ` Check your base URL and model name — the endpoint must be OpenAI-compatible (/chat/completions).`
-      : ""
-    throw new Error(`AI ghost error (${config.provider}) ${response.status}: ${err}${hint}`)
+    throw new Error(`AI ghost error (${config.provider}) ${response.status}: ${err}${getProviderErrorHint(config.provider)}`)
   }
 
   const data = await response.json()

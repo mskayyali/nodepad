@@ -1,7 +1,7 @@
 "use client"
 
 import { detectContentType } from "@/lib/detect-content-type"
-import { loadAIConfig, getBaseUrl, getProviderHeaders } from "@/lib/ai-settings"
+import { loadAIConfig, getBaseUrl, getProviderHeaders, shouldUseProxy, proxyChatCompletion, getProviderErrorHint } from "@/lib/ai-settings"
 import type { ContentType } from "@/lib/content-types"
 
 // ── Language detection ────────────────────────────────────────────────────────
@@ -219,29 +219,29 @@ You have live web access. For this note type, include 1–2 real source citation
   const langDirective = `[RESPOND IN: ${language}]\n`
   const userMessage = `${langDirective}<note_to_enrich>${safeText}</note_to_enrich>${urlContext}${categoryContext}${forcedTypeContext}${globalContext}`
 
-  const baseUrl = getBaseUrl(config)
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: getProviderHeaders(config),
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user",   content: userMessage },
-      ],
-      response_format: supportsJsonSchema
-        ? { type: "json_schema", json_schema: JSON_SCHEMA }
-        : { type: "json_object" },
-      temperature: 0.1,
-    }),
-  })
+  const requestBody = {
+    model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user",   content: userMessage },
+    ],
+    response_format: supportsJsonSchema
+      ? { type: "json_schema", json_schema: JSON_SCHEMA }
+      : { type: "json_object" },
+    temperature: 0.1,
+  }
+
+  const response = shouldUseProxy(config)
+    ? await proxyChatCompletion(config, requestBody)
+    : await fetch(`${getBaseUrl(config)}/chat/completions`, {
+        method: "POST",
+        headers: getProviderHeaders(config),
+        body: JSON.stringify(requestBody),
+      })
 
   if (!response.ok) {
     const err = await response.text()
-    const hint = (config.provider === "custom" || config.provider === "zai")
-      ? ` Check your base URL and model name — the endpoint must be OpenAI-compatible (/chat/completions).`
-      : ""
-    throw new Error(`AI enrich error (${config.provider}) ${response.status}: ${err}${hint}`)
+    throw new Error(`AI enrich error (${config.provider}) ${response.status}: ${err}${getProviderErrorHint(config.provider)}`)
   }
 
   const data = await response.json()
