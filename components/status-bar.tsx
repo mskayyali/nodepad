@@ -156,7 +156,7 @@ export function StatusBar({
         <div className="flex items-center gap-2 border-l border-white/5 pl-4 ml-4">
           {/* Model indicator */}
           {modelLabel && (
-            <span className="font-mono text-[9px] text-muted-foreground/60 uppercase tracking-wider px-1.5">
+            <span className="font-mono text-[9px] text-muted-foreground/60 uppercase tracking-wider px-1.5" suppressHydrationWarning>
               {modelLabel}
             </span>
           )}
