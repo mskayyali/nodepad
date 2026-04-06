@@ -308,7 +308,12 @@ You have live web access. For this note type, include 1–2 real source citation
     throw new Error(`AI enrich error (${config.provider}) ${response.status}: ${err}${getProviderErrorHint(config.provider)}`)
   }
 
-  const data = await response.json()
+  let data: any
+  try {
+    data = await response.json()
+  } catch {
+    throw new Error(`AI enrich error (${config.provider}): upstream returned invalid JSON. The provider may have timed out or returned a truncated response.${getProviderErrorHint(config.provider)}`)
+  }
   const content = data.choices?.[0]?.message?.content
   if (!content) throw new Error("No content in AI response")
 

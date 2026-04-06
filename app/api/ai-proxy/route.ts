@@ -84,7 +84,16 @@ export async function POST(req: NextRequest) {
         signal: controller.signal,
       })
 
-      const data = await response.json()
+      let data: unknown
+      try {
+        data = await response.json()
+      } catch {
+        const raw = await response.text().catch(() => "")
+        return NextResponse.json(
+          { error: `Upstream returned invalid JSON (HTTP ${response.status})${raw ? `: ${raw.substring(0, 200)}` : ""}` },
+          { status: 502 },
+        )
+      }
       return NextResponse.json(data, { status: response.status })
     } finally {
       clearTimeout(timer)
