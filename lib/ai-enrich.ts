@@ -2,6 +2,7 @@
 
 import { detectContentType } from "@/lib/detect-content-type"
 import { loadAIConfig, getBaseUrl, getProviderHeaders, getModelsForProvider } from "@/lib/ai-settings"
+import { geminiGenerateContent } from "@/lib/gemini-local"
 import type { ContentType } from "@/lib/content-types"
 
 // ── Language detection ────────────────────────────────────────────────────────
@@ -234,6 +235,42 @@ You have live web access. For this note type, include 1–2 real source citation
   const language = detectScript(text)
   const langDirective = `[RESPOND IN: ${language}]\n`
   const userMessage = `${langDirective}<note_to_enrich>${safeText}</note_to_enrich>${urlContext}${categoryContext}${forcedTypeContext}${globalContext}`
+
+  // ── Gemini (Local) path ──────────────────────────────────────────────────
+  if (config.provider === "gemini-local") {
+    const geminiConfig: Record<string, unknown> = {
+      temperature: 0.1,
+      responseMimeType: "application/json",
+    }
+
+    const raw = await geminiGenerateContent(
+      config.modelId,
+      [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+      geminiConfig,
+    )
+
+    let result: EnrichResult
+    try {
+      result = JSON.parse(raw)
+    } catch {
+      const fenceMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/)
+      if (fenceMatch) {
+        result = JSON.parse(fenceMatch[1].trim())
+      } else {
+        throw new Error(
+          `AI returned invalid JSON. Raw response: ${raw.substring(0, 200)}`
+        )
+      }
+    }
+    if (result.confidence != null) {
+      result.confidence = Math.min(100, Math.max(0, Math.round(result.confidence)))
+    }
+    // No source citations from CodeAssist API
+    return result
+  }
 
   const baseUrl = getBaseUrl(config)
   const response = await fetch(`${baseUrl}/chat/completions`, {

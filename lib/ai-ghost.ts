@@ -1,6 +1,7 @@
 "use client"
 
 import { loadAIConfig, getBaseUrl, getProviderHeaders } from "@/lib/ai-settings"
+import { geminiGenerateContent } from "@/lib/gemini-local"
 
 export interface GhostContext {
   text: string
@@ -49,6 +50,26 @@ ${context.map(c =>
 
 Return ONLY valid JSON:
 {"text": "...", "category": "..."}`
+
+  // ── Gemini (Local) path ──────────────────────────────────────────────────
+  if (config.provider === "gemini-local") {
+    const raw = await geminiGenerateContent(
+      model,
+      [{ role: "user", content: prompt }],
+      { temperature: 0.7, responseMimeType: "application/json" },
+    )
+
+    try {
+      return JSON.parse(raw) as GhostResult
+    } catch {
+      const textMatch = raw.match(/"text":\s*"(.*?)"/)
+      const catMatch = raw.match(/"category":\s*"(.*?)"/)
+      if (textMatch) {
+        return { text: textMatch[1], category: catMatch ? catMatch[1] : "thesis" }
+      }
+      throw new Error("Could not parse ghost response")
+    }
+  }
 
   const baseUrl = getBaseUrl(config)
   const response = await fetch(`${baseUrl}/chat/completions`, {

@@ -494,9 +494,12 @@ export default function Page() {
         } catch (e: any) {
           console.error(e)
           const isNoKey = e?.message?.includes("No API key") || false
+          const isGeminiCreds = e?.message?.includes("Credentials file not found") || false
+          const isGeminiToken = e?.message?.includes("Token refresh failed") || e?.message?.includes("invalid_grant") || false
+          const statusText = isNoKey ? "no-api-key" : isGeminiCreds ? "gemini-creds-missing" : isGeminiToken ? "gemini-token-expired" : undefined
           setProjects((current: Project[]) => current.map(proj => proj.id === projectId ? {
             ...proj,
-            blocks: proj.blocks.map(b => b.id === id ? { ...b, isEnriching: false, isError: true, statusText: isNoKey ? "no-api-key" : undefined } : b)
+            blocks: proj.blocks.map(b => b.id === id ? { ...b, isEnriching: false, isError: true, statusText } : b)
           } : proj))
         }
       }
@@ -882,7 +885,7 @@ export default function Page() {
           }}
         />
 
-        {!settings.apiKey && (
+        {!settings.apiKey && settings.provider !== "gemini-local" && (
           <div className="flex items-center justify-center gap-3 px-4 py-2 bg-amber-950/80 border-b border-amber-800/60 text-amber-200 text-xs shrink-0">
             <span className="opacity-80">⚡ AI enrichment is inactive — add an API key to classify and annotate your notes.</span>
             <div className="flex items-center gap-2 shrink-0">
@@ -978,8 +981,8 @@ export default function Page() {
               transition={{ duration: 0.15, ease: "easeOut" }}
               className="absolute bottom-[72px] left-1/2 -translate-x-1/2 z-[130] pointer-events-none"
             >
-              <div className="px-3 py-1.5 rounded-sm bg-black/90 border border-white/15 backdrop-blur-md shadow-xl">
-                <span className="font-mono text-[10px] text-white/70 tracking-tight whitespace-nowrap">{undoToast}</span>
+              <div className="px-3 py-1.5 rounded-sm bg-surface-raised border border-border backdrop-blur-md shadow-xl">
+                <span className="font-mono text-[10px] text-foreground/80 tracking-tight whitespace-nowrap">{undoToast}</span>
               </div>
             </motion.div>
           )}

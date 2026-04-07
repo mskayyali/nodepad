@@ -12,7 +12,7 @@ export interface AIModel {
   groundingModelId?: string
 }
 
-export type AIProvider = "openrouter" | "openai"
+export type AIProvider = "openrouter" | "openai" | "gemini-local"
 
 export interface AIProviderPreset {
   id: AIProvider
@@ -36,6 +36,13 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     baseUrl: "https://api.openai.com/v1",
     keyUrl: "https://platform.openai.com/api-keys",
     keyPlaceholder: "sk-...",
+  },
+  {
+    id: "gemini-local",
+    label: "Gemini (Local)",
+    baseUrl: "",
+    keyUrl: "",
+    keyPlaceholder: "",
   },
 ]
 
@@ -121,8 +128,54 @@ export const OPENAI_MODELS: AIModel[] = [
   },
 ]
 
+export const GEMINI_LOCAL_MODELS: AIModel[] = [
+  {
+    id: "gemini-3.1-pro-preview",
+    label: "Gemini 3.1 Pro",
+    shortLabel: "G-3.1 Pro",
+    description: "Latest, most capable (preview)",
+    supportsGrounding: false,
+  },
+  {
+    id: "gemini-3-pro-preview",
+    label: "Gemini 3 Pro",
+    shortLabel: "G-3 Pro",
+    description: "Strong reasoning (preview)",
+    supportsGrounding: false,
+  },
+  {
+    id: "gemini-3-flash-preview",
+    label: "Gemini 3 Flash",
+    shortLabel: "G-3 Flash",
+    description: "Fast Gemini 3 (preview)",
+    supportsGrounding: false,
+  },
+  {
+    id: "gemini-2.5-pro",
+    label: "Gemini 2.5 Pro",
+    shortLabel: "G-2.5 Pro",
+    description: "Stable, best reasoning",
+    supportsGrounding: false,
+  },
+  {
+    id: "gemini-2.5-flash",
+    label: "Gemini 2.5 Flash",
+    shortLabel: "G-2.5 Flash",
+    description: "Fast, great balance",
+    supportsGrounding: false,
+  },
+  {
+    id: "gemini-2.5-flash-lite",
+    label: "Gemini 2.5 Flash Lite",
+    shortLabel: "G-2.5 Lite",
+    description: "Fastest, lightweight",
+    supportsGrounding: false,
+  },
+]
+
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
   if (provider === "openai") return OPENAI_MODELS
+  if (provider === "gemini-local") return GEMINI_LOCAL_MODELS
   return AI_MODELS // openrouter + safe fallback for any stale localStorage value
 }
 
@@ -164,7 +217,7 @@ export interface AIConfig {
 
 export function loadAIConfig(): AIConfig | null {
   const s = loadSettings()
-  if (!s.apiKey) return null
+  if (!s.apiKey && s.provider !== "gemini-local") return null
   const models = getModelsForProvider(s.provider)
   const model = models.find(m => m.id === s.modelId)
   // Use the matched model's id if found; otherwise fall back to the first model
@@ -173,6 +226,7 @@ export function loadAIConfig(): AIConfig | null {
   // that string won't match any entry in OPENAI_MODELS so we fall back to "gpt-4o".
   const modelId = model?.id ?? models[0]?.id ?? s.modelId ?? DEFAULT_MODEL_ID
   const supportsGrounding =
+    s.provider !== "gemini-local" &&
     (s.provider === "openrouter" || s.provider === "openai") &&
     s.webGrounding &&
     (model?.supportsGrounding ?? false)

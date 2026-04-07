@@ -26,6 +26,7 @@ import {
   type AISettings,
   type AIProvider,
 } from "@/lib/ai-settings"
+import { checkGeminiLocalStatus } from "@/lib/gemini-local"
 
 interface Project {
   id: string
@@ -75,6 +76,15 @@ export function ProjectSidebar({
   const [providerOpen, setProviderOpen] = useState(false)
   // local draft for settings (only save on "Save")
   const [draft, setDraft] = useState<AISettings>(aiSettings)
+  const [geminiStatus, setGeminiStatus] = useState<{ configured: boolean; error?: string }>({ configured: false })
+
+  // Check Gemini (Local) credential status when settings panel opens or provider changes
+  useEffect(() => {
+    if (showSettings && draft.provider === "gemini-local") {
+      checkGeminiLocalStatus().then(setGeminiStatus)
+    }
+  }, [showSettings, draft.provider])
+
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -128,7 +138,7 @@ export function ProjectSidebar({
         opacity: isOpen ? 1 : 0,
         visibility: isOpen ? "visible" : "hidden"
       }}
-      className="relative z-50 transition-all duration-200 ease-in-out overflow-hidden border-r border-border bg-black/20 backdrop-blur-3xl flex flex-col h-full"
+      className="relative z-50 transition-all duration-200 ease-in-out overflow-hidden border-r border-border bg-card/80 backdrop-blur-3xl flex flex-col h-full"
     >
       <div className="w-[240px] flex flex-col h-full">
         {/* Header */}
@@ -155,7 +165,7 @@ export function ProjectSidebar({
           </div>
           <button 
             onClick={onClose}
-            className="p-1 px-1.5 hover:bg-white/5 rounded-sm transition-colors text-muted-foreground hover:text-foreground"
+            className="p-1 px-1.5 hover:bg-secondary/50 rounded-sm transition-colors text-muted-foreground hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -179,7 +189,7 @@ export function ProjectSidebar({
                     className={`group relative rounded-sm transition-all duration-150 ${
                       activeProjectId === project.id 
                         ? "bg-primary/10 shadow-[inset_0_1px_0px_rgba(255,255,255,0.05)]" 
-                        : "hover:bg-white/5"
+                        : "hover:bg-secondary/50"
                     }`}
                   >
                     <div className="flex items-center p-2 px-2.5">
@@ -220,7 +230,7 @@ export function ProjectSidebar({
                                 setEditName(project.name)
                                 setEditingId(project.id)
                               }}
-                              className="p-1 hover:bg-white/10 rounded-sm text-muted-foreground hover:text-primary transition-colors"
+                              className="p-1 hover:bg-secondary rounded-sm text-muted-foreground hover:text-primary transition-colors"
                             >
                               <Edit3 className="h-3 w-3" />
                             </button>
@@ -290,7 +300,7 @@ export function ProjectSidebar({
                   <div className="relative">
                     <button
                       onClick={() => setProviderOpen(v => !v)}
-                      className="flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-left hover:bg-white/[0.07] focus:outline-none transition-colors"
+                      className="flex w-full items-center justify-between rounded-md border border-border bg-secondary/30 px-2.5 py-2 text-left hover:bg-secondary/50 focus:outline-none transition-colors"
                     >
                       <span className="font-mono text-[11px] font-bold text-foreground">{currentPreset.label}</span>
                       <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${providerOpen ? "rotate-180" : ""}`} />
@@ -302,7 +312,7 @@ export function ProjectSidebar({
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -4 }}
                           transition={{ duration: 0.1 }}
-                          className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-xl"
+                          className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-border bg-popover shadow-xl"
                         >
                           {AI_PROVIDER_PRESETS.map(preset => (
                             <button
@@ -321,10 +331,10 @@ export function ProjectSidebar({
                                 }))
                                 setProviderOpen(false)
                               }}
-                              className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
+                              className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-secondary/50 transition-colors"
                             >
                               <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                                draft.provider === preset.id ? "border-primary bg-primary/20" : "border-white/10"
+                                draft.provider === preset.id ? "border-primary bg-primary/20" : "border-border"
                               }`}>
                                 {draft.provider === preset.id && <Check className="h-2.5 w-2.5 text-primary" />}
                               </div>
@@ -337,12 +347,13 @@ export function ProjectSidebar({
                   </div>
                 </div>
 
-                {/* API Key */}
+                {/* API Key — hidden for gemini-local */}
+                {draft.provider !== "gemini-local" && (
                 <div className="flex flex-col gap-2">
                   <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
                     API Key
                   </label>
-                  <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-secondary/30 px-2.5 py-2 focus-within:border-primary/50 transition-colors">
                     <Key className="h-3 w-3 shrink-0 text-muted-foreground" />
                     <input
                       type="text"
@@ -368,6 +379,37 @@ export function ProjectSidebar({
                     )}
                   </p>
                 </div>
+                )}
+
+                {/* Gemini (Local) credential status */}
+                {draft.provider === "gemini-local" && (
+                  <div className="flex flex-col gap-2">
+                    <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                      Credentials
+                    </label>
+                    <div className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${
+                      geminiStatus.configured
+                        ? "bg-primary/10 border border-primary/20 text-primary"
+                        : "bg-red-500/10 border border-red-500/20 text-red-400"
+                    }`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${geminiStatus.configured ? "bg-primary animate-pulse" : "bg-red-400"}`} />
+                      {geminiStatus.configured
+                        ? "Gemini CLI credentials found"
+                        : geminiStatus.error ?? "Credentials not found"}
+                    </div>
+                    {!geminiStatus.configured && (
+                      <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
+                        Copy your Gemini CLI credentials:{" "}
+                        <code className="text-foreground/60">cp ~/.gemini/oauth_creds.json ./gemini-creds.json</code>
+                        {" · "}
+                        <a href="/docs/gemini-local-setup.md" target="_blank" rel="noopener noreferrer"
+                          className="text-primary underline hover:brightness-125 transition-all">
+                          Setup instructions →
+                        </a>
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Model Selector */}
                 <div className="flex flex-col gap-2">
@@ -375,7 +417,7 @@ export function ProjectSidebar({
                     Model
                   </label>
                   {models.length === 0 ? (
-                    <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                    <div className="flex items-center gap-2 rounded-md border border-border bg-secondary/30 px-2.5 py-2 focus-within:border-primary/50 transition-colors">
                       <input
                         type="text"
                         value={draft.modelId}
@@ -390,7 +432,7 @@ export function ProjectSidebar({
                     <div className="relative">
                       <button
                         onClick={() => setModelOpen(v => !v)}
-                        className="flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-left hover:bg-white/[0.07] focus:outline-none transition-colors"
+                        className="flex w-full items-center justify-between rounded-md border border-border bg-secondary/30 px-2.5 py-2 text-left hover:bg-secondary/50 focus:outline-none transition-colors"
                       >
                         <div>
                           <div className="font-mono text-[11px] font-bold text-foreground">{selectedModel?.label ?? draft.modelId}</div>
@@ -405,7 +447,7 @@ export function ProjectSidebar({
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -4 }}
                             transition={{ duration: 0.1 }}
-                            className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-xl"
+                            className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-border bg-popover shadow-xl"
                           >
                             {models.map(model => (
                               <button
@@ -414,10 +456,10 @@ export function ProjectSidebar({
                                   setDraft(d => ({ ...d, modelId: model.id, webGrounding: model.supportsGrounding ? d.webGrounding : false }))
                                   setModelOpen(false)
                                 }}
-                                className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
+                                className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-secondary/50 transition-colors"
                               >
                                 <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                                  draft.modelId === model.id ? "border-primary bg-primary/20" : "border-white/10"
+                                  draft.modelId === model.id ? "border-primary bg-primary/20" : "border-border"
                                 }`}>
                                   {draft.modelId === model.id && <Check className="h-2.5 w-2.5 text-primary" />}
                                 </div>
@@ -436,8 +478,8 @@ export function ProjectSidebar({
                 </div>
 
                 {/* Web Grounding (OpenRouter + OpenAI) */}
-                {(draft.provider === "openrouter" || draft.provider === "openai") && selectedModel && (
-                  <div className="flex items-start justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2.5">
+                {draft.provider !== "gemini-local" && (draft.provider === "openrouter" || draft.provider === "openai") && selectedModel && (
+                  <div className="flex items-start justify-between gap-3 rounded-md border border-border/50 bg-secondary/20 px-2.5 py-2.5">
                     <div className="flex items-start gap-2">
                       <Globe className="h-3.5 w-3.5 mt-0.5 text-primary/60 shrink-0" />
                       <div>
@@ -455,7 +497,7 @@ export function ProjectSidebar({
                       onClick={() => selectedModel.supportsGrounding && setDraft(d => ({ ...d, webGrounding: !d.webGrounding }))}
                       disabled={!selectedModel.supportsGrounding}
                       className={`relative shrink-0 h-5 w-9 rounded-full transition-all duration-200 ${
-                        draft.webGrounding && selectedModel.supportsGrounding ? "bg-primary" : "bg-white/10"
+                        draft.webGrounding && selectedModel.supportsGrounding ? "bg-primary" : "bg-muted-foreground/20"
                       } disabled:opacity-30 disabled:cursor-not-allowed`}
                     >
                       <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${
@@ -467,12 +509,14 @@ export function ProjectSidebar({
 
                 {/* API Status */}
                 <div className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${
-                  draft.apiKey
+                  (draft.provider === "gemini-local" ? geminiStatus.configured : draft.apiKey)
                     ? "bg-primary/10 border border-primary/20 text-primary"
-                    : "bg-white/5 border border-white/5 text-muted-foreground"
+                    : "bg-secondary/50 border border-border/50 text-muted-foreground"
                 }`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${draft.apiKey ? "bg-primary animate-pulse" : "bg-white/30"}`} />
-                  {draft.apiKey ? `${currentPreset.label} — API key configured` : "No API key — AI disabled"}
+                  <span className={`h-1.5 w-1.5 rounded-full ${(draft.provider === "gemini-local" ? geminiStatus.configured : draft.apiKey) ? "bg-primary animate-pulse" : "bg-muted-foreground/30"}`} />
+                  {draft.provider === "gemini-local"
+                    ? (geminiStatus.configured ? "Gemini (Local) — credentials configured" : "Gemini (Local) — credentials not found")
+                    : (draft.apiKey ? `${currentPreset.label} — API key configured` : "No API key — AI disabled")}
                 </div>
               </motion.div>
             )}
@@ -480,7 +524,7 @@ export function ProjectSidebar({
         </div>
 
         {/* Footer */}
-        <div className="p-3 border-t border-white/5 bg-black/10 shrink-0">
+        <div className="p-3 border-t border-border/50 bg-card/50 shrink-0">
           {showSettings ? (
             <div className="flex flex-col gap-1.5">
               <button
@@ -492,7 +536,7 @@ export function ProjectSidebar({
               </button>
               <button
                 onClick={() => setShowSettings(false)}
-                className="flex items-center justify-center w-full h-8 px-2.5 rounded-sm bg-white/5 hover:bg-white/10 text-muted-foreground font-mono text-[9px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.98] border border-white/5"
+                className="flex items-center justify-center w-full h-8 px-2.5 rounded-sm bg-secondary/50 hover:bg-secondary text-muted-foreground font-mono text-[9px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.98] border border-border/50"
               >
                 Cancel
               </button>
@@ -508,7 +552,7 @@ export function ProjectSidebar({
               </button>
               <button
                 onClick={onImportProject}
-                className="flex items-center justify-between w-full h-8 px-2.5 rounded-sm bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground font-mono text-[9px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.98] border border-white/5"
+                className="flex items-center justify-between w-full h-8 px-2.5 rounded-sm bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-foreground font-mono text-[9px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.98] border border-border/50"
                 title="Import a .nodepad file"
               >
                 <span>Import .nodepad</span>
@@ -516,7 +560,7 @@ export function ProjectSidebar({
               </button>
               <button
                 onClick={() => setShowSettings(true)}
-                className="flex items-center justify-between w-full h-8 px-2.5 rounded-sm bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground font-mono text-[9px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.98] border border-white/5"
+                className="flex items-center justify-between w-full h-8 px-2.5 rounded-sm bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-foreground font-mono text-[9px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.98] border border-border/50"
               >
                 <span>Settings</span>
                 <Settings className="h-3.5 w-3.5" />

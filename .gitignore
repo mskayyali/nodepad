@@ -19,3 +19,6 @@ CLAUDE.md
 ARCHITECTURE.md
 DEMO_TRANSCRIPT.md
 DESIGN_CASE_STUDY.md
+
+# Gemini (Local) provider credentials — never commit
+gemini-creds.json

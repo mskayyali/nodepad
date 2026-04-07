@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  devIndicators: false,
   typescript: {
     // Build errors are intentionally ignored — see CLAUDE.md
     ignoreBuildErrors: true,
@@ -47,7 +48,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cloud.umami.is",
               "style-src 'self' 'unsafe-inline'",
-              "connect-src 'self' https://openrouter.ai https://api.openai.com https://cloud.umami.is https://api-gateway.umami.dev",
+              "connect-src 'self' https://openrouter.ai https://api.openai.com https://cloudcode-pa.googleapis.com https://cloud.umami.is https://api-gateway.umami.dev",
               "img-src 'self' data: blob: https://i.ytimg.com",
               "font-src 'self' data:",
               "frame-src https://www.youtube-nocookie.com https://www.youtube.com",
