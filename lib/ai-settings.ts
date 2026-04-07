@@ -8,6 +8,8 @@ export interface AIModel {
   shortLabel: string
   description: string
   supportsGrounding: boolean
+  /** For OpenAI models: the search-preview variant to use when grounding is enabled */
+  groundingModelId?: string
 }
 
 export type AIProvider = "openrouter" | "openai" | "zai" | "custom"
@@ -93,10 +95,50 @@ export const AI_MODELS: AIModel[] = [
   },
 ]
 
+export const OPENAI_MODELS: AIModel[] = [
+  {
+    id: "gpt-4o",
+    label: "GPT-4o",
+    shortLabel: "GPT-4o",
+    description: "Strong structured output, broad knowledge",
+    supportsGrounding: true,
+    groundingModelId: "gpt-4o-search-preview",
+  },
+  {
+    id: "gpt-4o-mini",
+    label: "GPT-4o Mini",
+    shortLabel: "GPT-4o Mini",
+    description: "Fast and capable, web grounding available",
+    supportsGrounding: true,
+    groundingModelId: "gpt-4o-mini-search-preview",
+  },
+  {
+    id: "gpt-4.1",
+    label: "GPT-4.1",
+    shortLabel: "GPT-4.1",
+    description: "Latest GPT-4, improved instruction following",
+    supportsGrounding: false,
+  },
+  {
+    id: "gpt-4.1-mini",
+    label: "GPT-4.1 Mini",
+    shortLabel: "GPT-4.1 Mini",
+    description: "Fast and capable, good balance",
+    supportsGrounding: false,
+  },
+  {
+    id: "o4-mini",
+    label: "o4-mini",
+    shortLabel: "o4-mini",
+    description: "Fast reasoning model",
+    supportsGrounding: false,
+  },
+]
+
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
   switch (provider) {
     case "openrouter": return AI_MODELS
-    case "openai":     return []
+    case "openai":     return OPENAI_MODELS
     case "zai":        return []
     case "custom":     return []
   }
@@ -111,28 +153,22 @@ export interface AISettings {
   webGrounding: boolean
   provider: AIProvider
   customBaseUrl: string
+  /** Per-provider key store so switching back to a provider restores its key */
+  providerKeys?: Partial<Record<AIProvider, string>>
 }
 
 const STORAGE_KEY = "nodepad-ai-settings"
 
-const DEFAULT_SETTINGS: AISettings = {
-  apiKey: "",
-  modelId: DEFAULT_MODEL_ID,
-  webGrounding: false,
-  provider: DEFAULT_PROVIDER,
-  customBaseUrl: "",
-}
-
 function loadSettings(): AISettings {
   if (typeof window === "undefined") {
-    return DEFAULT_SETTINGS
+    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "" }
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return DEFAULT_SETTINGS
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
+    if (!raw) return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "" }
+    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "", ...JSON.parse(raw) }
   } catch {
-    return DEFAULT_SETTINGS
+    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "" }
   }
 }
 
@@ -147,11 +183,17 @@ export interface AIConfig {
 export function loadAIConfig(): AIConfig | null {
   const s = loadSettings()
   if (!s.apiKey) return null
-  if (!s.modelId) return null
   const models = getModelsForProvider(s.provider)
   const model = models.find(m => m.id === s.modelId)
-  const modelId = s.modelId || (models[0]?.id ?? DEFAULT_MODEL_ID)
-  const supportsGrounding = s.provider === "openrouter" && (model?.supportsGrounding ?? false)
+  // Use the matched model's id if found; otherwise fall back to the first model
+  // for this provider.  This handles the case where localStorage still holds an
+  // OpenRouter-prefixed id (e.g. "openai/gpt-4o") after switching to OpenAI —
+  // that string won't match any entry in OPENAI_MODELS so we fall back to "gpt-4o".
+  const modelId = model?.id ?? models[0]?.id ?? s.modelId ?? DEFAULT_MODEL_ID
+  const supportsGrounding =
+    (s.provider === "openrouter" || s.provider === "openai") &&
+    s.webGrounding &&
+    (model?.supportsGrounding ?? false)
   return { apiKey: s.apiKey, modelId, supportsGrounding, provider: s.provider, customBaseUrl: s.customBaseUrl }
 }
 
@@ -262,15 +304,24 @@ function isBlockedHost(rawUrl: string): boolean {
 export function getAIHeaders(): Record<string, string> {
   const config = loadAIConfig()
   if (!config) return {}
+  const models = getModelsForProvider(config.provider)
+  const model = models.find(m => m.id === config.modelId) || AI_MODELS.find(m => m.id === DEFAULT_MODEL_ID)!
   return {
     "x-or-key": config.apiKey,
     "x-or-model": config.modelId,
-    "x-or-supports-grounding": config.supportsGrounding ? "true" : "false",
+    "x-or-supports-grounding": model.supportsGrounding ? "true" : "false",
   }
 }
 
 export function useAISettings() {
-  const [settings, setSettings] = useState<AISettings>(DEFAULT_SETTINGS)
+  // Always start with the SSR-safe default so server and client render identically.
+  // Load the real localStorage value after mount to avoid hydration mismatches
+  // caused by settings.apiKey toggling conditional DOM blocks (API key banner,
+  // modelLabel prop, etc.) between the server render and client hydration.
+  const [settings, setSettings] = useState<AISettings>({
+    apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false,
+    provider: DEFAULT_PROVIDER, customBaseUrl: "",
+  })
 
   useEffect(() => {
     setSettings(loadSettings())

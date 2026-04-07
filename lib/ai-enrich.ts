@@ -1,7 +1,7 @@
 "use client"
 
 import { detectContentType } from "@/lib/detect-content-type"
-import { loadAIConfig, getBaseUrl, getProviderHeaders, shouldUseProxy, proxyChatCompletion, getProviderErrorHint } from "@/lib/ai-settings"
+import { loadAIConfig, getBaseUrl, getProviderHeaders, shouldUseProxy, proxyChatCompletion, getProviderErrorHint, getModelsForProvider } from "@/lib/ai-settings"
 import type { ContentType } from "@/lib/content-types"
 
 // ── Language detection ────────────────────────────────────────────────────────
@@ -88,7 +88,9 @@ const JSON_SCHEMA = {
       },
       category:           { type: "string" },
       annotation:         { type: "string" },
-      confidence:         { type: ["number", "null"] },
+      confidence: {
+        anyOf: [{ type: "number" }, { type: "null" }],
+      },
       influencedByIndices: {
         type: "array",
         items: { type: "number" },
@@ -99,8 +101,8 @@ const JSON_SCHEMA = {
         description: "True if the note is completely unrelated",
       },
       mergeWithIndex: {
-        type: ["number", "null"],
-        description: "Index of an existing note to merge into",
+        anyOf: [{ type: "number" }, { type: "null" }],
+        description: "Index of an existing note to merge into, or null if this note stands alone",
       },
     },
     required: ["contentType","category","annotation","confidence","influencedByIndices","isUnrelated","mergeWithIndex"],
@@ -143,71 +145,7 @@ export interface EnrichResult {
   influencedByIndices: number[]
   isUnrelated: boolean
   mergeWithIndex: number | null
-}
-
-function decodeJsonishString(value: string): string {
-  const normalized = value
-    .replace(/\\r/g, "\r")
-    .replace(/\\n/g, "\n")
-    .replace(/\\t/g, "\t")
-    .replace(/\\"/g, "\"")
-    .replace(/\\\\/g, "\\")
-
-  return normalized.trim()
-}
-
-function extractJsonCandidate(content: string): string | null {
-  const fenceMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/)
-  if (fenceMatch) return fenceMatch[1].trim()
-
-  const start = content.indexOf("{")
-  const end = content.lastIndexOf("}")
-  if (start !== -1 && end !== -1 && end > start) {
-    return content.slice(start, end + 1).trim()
-  }
-
-  return null
-}
-
-function coerceLooseEnrichResult(content: string): EnrichResult | null {
-  const contentTypeMatch = content.match(/"contentType"\s*:\s*"([^"]+)"/)
-  const categoryMatch = content.match(/"category"\s*:\s*"([^"]+)"/)
-  const annotationMatch = content.match(
-    /"annotation"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"(?:confidence|influencedByIndices|isUnrelated|mergeWithIndex)"|\s*$)/
-  )
-
-  if (!contentTypeMatch || !categoryMatch || !annotationMatch) return null
-
-  const confidenceRaw = content.match(/"confidence"\s*:\s*(null|-?\d+(?:\.\d+)?)/)?.[1]
-  const influencedRaw = content.match(/"influencedByIndices"\s*:\s*\[([^\]]*)\]/)?.[1]
-  const isUnrelatedRaw = content.match(/"isUnrelated"\s*:\s*(true|false)/)?.[1]
-  const mergeRaw = content.match(/"mergeWithIndex"\s*:\s*(null|-?\d+)/)?.[1]
-
-  const influencedByIndices = influencedRaw
-    ? influencedRaw
-        .split(",")
-        .map(part => Number(part.trim()))
-        .filter(Number.isFinite)
-    : []
-
-  return {
-    contentType: contentTypeMatch[1] as ContentType,
-    category: decodeJsonishString(categoryMatch[1]),
-    annotation: decodeJsonishString(annotationMatch[1]),
-    confidence: confidenceRaw == null || confidenceRaw === "null" ? null : Number(confidenceRaw),
-    influencedByIndices,
-    isUnrelated: isUnrelatedRaw === "true",
-    mergeWithIndex: mergeRaw == null || mergeRaw === "null" ? null : Number(mergeRaw),
-  }
-}
-
-function parseEnrichResult(content: string): EnrichResult | null {
-  const candidate = extractJsonCandidate(content) ?? content.trim()
-  try {
-    return JSON.parse(candidate) as EnrichResult
-  } catch {
-    return coerceLooseEnrichResult(candidate)
-  }
+  sources?: { url: string; title: string; siteName: string }[]
 }
 
 export async function enrichBlockClient(
@@ -224,18 +162,32 @@ export async function enrichBlockClient(
   const shouldGround = config.supportsGrounding && TRUTH_DEPENDENT_TYPES.has(effectiveType)
 
   let model = config.modelId
-  if (shouldGround && !model.endsWith(":online")) {
-    model = `${model}:online`
+  let webSearchOptions: Record<string, unknown> | undefined
+  if (shouldGround) {
+    if (config.provider === "openrouter") {
+      if (!model.endsWith(":online")) model = `${model}:online`
+    } else if (config.provider === "openai") {
+      const modelDef = getModelsForProvider("openai").find(m => m.id === config.modelId)
+      if (modelDef?.groundingModelId) model = modelDef.groundingModelId
+      webSearchOptions = {}
+    }
   }
 
   const supportsJsonSchema = config.provider === "openrouter" || config.provider === "openai"
+  // gpt-*-search-preview models have known issues with strict json_schema + web_search_options;
+  // fall back to json_object mode (guaranteed valid JSON, no schema enforcement)
+  const useStrictSchema = supportsJsonSchema && !webSearchOptions
 
   const groundingNote = shouldGround
     ? `\n\n## Source Citations (grounded search active)
 You have live web access. For this note type, include 1–2 real source citations by name, publication, and year. Do NOT generate URLs — reference by title and author only (e.g. "Per *Science*, 2023, Doe et al."). Only cite sources you have actually retrieved.`
     : ""
 
-  const schemaHint = !supportsJsonSchema
+  // Inject an explicit JSON instruction whenever we fall back to json_object mode.
+  // OpenAI requires the word "json" to appear in the messages when using
+  // response_format: json_object — this covers both non-schema providers AND
+  // the grounded OpenAI path where search-preview models can't use json_schema.
+  const schemaHint = !useStrictSchema
     ? `\n\n## Output Format — CRITICAL\nYou MUST respond with a single JSON object (no markdown, no explanation). Schema:\n${JSON.stringify(JSON_SCHEMA.schema, null, 2)}`
     : ""
 
@@ -274,7 +226,7 @@ You have live web access. For this note type, include 1–2 real source citation
       ].filter(Boolean).join("\n")
       urlContext = parts
         ? `\n\n<url_fetch_result status="ok">\n${parts}\n</url_fetch_result>`
-        : "\n\n<url_fetch_result status=\"ok\">Page loaded but no readable content found.</url_fetch_result>"
+        : "\n\n<url_fetch_result status="ok\">Page loaded but no readable content found.</url_fetch_result>"
     }
   }
 
@@ -283,16 +235,23 @@ You have live web access. For this note type, include 1–2 real source citation
   const langDirective = `[RESPOND IN: ${language}]\n`
   const userMessage = `${langDirective}<note_to_enrich>${safeText}</note_to_enrich>${urlContext}${categoryContext}${forcedTypeContext}${globalContext}`
 
-  const requestBody = {
+  const requestBody: Record<string, unknown> = {
     model,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user",   content: userMessage },
     ],
-    response_format: supportsJsonSchema
-      ? { type: "json_schema", json_schema: JSON_SCHEMA }
-      : { type: "json_object" },
-    temperature: 0.1,
+    // OpenAI search-preview models reject both response_format AND temperature;
+    // when web_search_options is present, omit both and rely on the schemaHint
+    // in the system prompt to get structured JSON output.
+    ...(webSearchOptions === undefined
+      ? {
+          response_format: useStrictSchema
+            ? { type: "json_schema", json_schema: JSON_SCHEMA }
+            : { type: "json_object" },
+          temperature: 0.1,
+        }
+      : { web_search_options: webSearchOptions }),
   }
 
   const response = shouldUseProxy(config)
@@ -317,16 +276,44 @@ You have live web access. For this note type, include 1–2 real source citation
   const content = data.choices?.[0]?.message?.content
   if (!content) throw new Error("No content in AI response")
 
-  const finishReason = data.choices?.[0]?.finish_reason
-  const result = parseEnrichResult(content)
-  if (!result) {
-    const finishReasonNote = finishReason ? ` Finish reason: ${finishReason}.` : ""
-    throw new Error(
-      `AI returned invalid JSON.${finishReasonNote} The model may not support structured output.\n\nRaw response: ${content.substring(0, 200)}`
-    )
+  let result: EnrichResult
+  try {
+    result = JSON.parse(content)
+  } catch {
+    const fenceMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/)
+    if (fenceMatch) {
+      result = JSON.parse(fenceMatch[1].trim())
+    } else {
+      throw new Error(
+        `AI returned invalid JSON. The model may not support structured output.\n\nRaw response: ${content.substring(0, 200)}`
+      )
+    }
   }
   if (result.confidence != null) {
     result.confidence = Math.min(100, Math.max(0, Math.round(result.confidence)))
   }
+
+  // Extract clickable source links from response annotations.
+  // Both OpenRouter :online and OpenAI search-preview return citations as
+  // annotations on the message object — not inside the JSON content itself.
+  const annotations: Array<{ type: string; url_citation?: { url: string; title?: string } }> =
+    data.choices?.[0]?.message?.annotations ?? []
+  const seen = new Set<string>()
+  const sources = annotations
+    .filter(a => a.type === "url_citation" && a.url_citation?.url)
+    .map(a => {
+      const { url, title } = a.url_citation!
+      let siteName = ""
+      try { siteName = new URL(url).hostname.replace(/^www\./, "") } catch { /* ignore */ }
+      return { url, title: title || siteName, siteName }
+    })
+    .filter(s => {
+      if (seen.has(s.url)) return false
+      seen.add(s.url)
+      return true
+    })
+
+  if (sources.length > 0) result.sources = sources
+
   return result
 }

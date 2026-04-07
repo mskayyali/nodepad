@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react"
 import { createPortal } from "react-dom"
-import { X, Check, ArrowRight, Pin, RefreshCw, ChevronDown, ChevronRight, ChevronLeft, Link as LinkIcon, Sparkles, Tag } from "lucide-react"
+import { X, Check, Pin, RefreshCw, ChevronDown, ChevronRight, ChevronLeft, Link as LinkIcon, Sparkles, Tag } from "lucide-react"
 import { motion } from "framer-motion"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -629,33 +629,6 @@ export const TileCard = memo(function TileCard({
               </div>
             )}
 
-            {/* Sources */}
-            {!isEditing && block.sources && block.sources.length > 0 && (
-              <div className="px-3 pb-3 flex flex-col gap-1 flex-shrink-0">
-                {block.sources.map((source, idx) => (
-                  <a
-                    key={idx}
-                    href={source.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group/source flex items-center justify-between rounded-sm border border-border/50 bg-secondary/30 px-2 py-1.5 transition-colors hover:bg-secondary"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex flex-col truncate pr-2">
-                      <span className="truncate text-[11px] text-foreground/90 group-hover/source:text-foreground">
-                        {source.title}
-                      </span>
-                      <span className="truncate font-mono text-[9px] text-muted-foreground">
-                        {source.siteName}
-                      </span>
-                    </div>
-                    <div className="rotate-[-45deg] text-muted-foreground transition-transform group-hover/source:translate-x-[1px] group-hover/source:translate-y-[-1px] group-hover/source:text-foreground">
-                      <ArrowRight className="h-3 w-3" />
-                    </div>
-                  </a>
-                ))}
-              </div>
-            )}
 
             {/* Footer */}
             <div

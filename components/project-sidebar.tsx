@@ -26,6 +26,7 @@ import {
   getPreset,
   validateCustomBaseUrl,
   type AISettings,
+  type AIProvider,
 } from "@/lib/ai-settings"
 
 interface Project {
@@ -122,8 +123,13 @@ export function ProjectSidebar({
         return
       }
     }
+    // Persist this provider's key so switching back restores it
+    const providerKeys: Partial<Record<AIProvider, string>> = {
+      ...(draft.providerKeys ?? {}),
+      [draft.provider]: draft.apiKey,
+    }
     setUrlError(null)
-    onUpdateAISettings(draft)
+    onUpdateAISettings({ ...draft, providerKeys })
     setShowSettings(false)
   }
 
@@ -320,17 +326,18 @@ export function ProjectSidebar({
                             <button
                               key={preset.id}
                               onClick={() => {
+                                const newModels = getModelsForProvider(preset.id)
                                 setDraft(d => ({
                                   ...d,
                                   provider: preset.id,
-                                  modelId: preset.id === "openrouter"
-                                    ? (d.modelId || getModelsForProvider("openrouter")[0]?.id || d.modelId)
-                                    : d.modelId.replace(/^openai\//, ""),
-                                  webGrounding: preset.id === "openrouter" ? d.webGrounding : false,
+                                  modelId: newModels[0]?.id ?? d.modelId,
+                                  webGrounding: d.webGrounding,
                                   customBaseUrl: preset.id === "zai" ? preset.baseUrl : preset.id === "custom" ? d.customBaseUrl : "",
+                                  // Restore the saved key for this provider if one exists,
+                                  // otherwise clear so the user knows to enter a new one.
+                                  apiKey: d.providerKeys?.[preset.id] ?? "",
                                 }))
                                 setProviderOpen(false)
-                                setModelOpen(false)
                               }}
                               className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
                             >
@@ -388,6 +395,7 @@ export function ProjectSidebar({
                       onChange={e => setDraft(d => ({ ...d, apiKey: e.target.value }))}
                       placeholder={currentPreset.keyPlaceholder || "Your API key"}
                       className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                      style={showKey ? undefined : { WebkitTextSecurity: "disc" } as never}
                       autoComplete="off"
                       spellCheck={false}
                     />
@@ -464,7 +472,7 @@ export function ProjectSidebar({
                                   <div className="font-mono text-[10px] font-bold text-foreground">{model.label}</div>
                                   <div className="font-mono text-[9px] text-muted-foreground">{model.description}</div>
                                 </div>
-                                {model.supportsGrounding && draft.provider === "openrouter" && <Globe className="ml-auto h-3 w-3 shrink-0 text-primary/50" />}
+                                {model.supportsGrounding && (draft.provider === "openrouter" || draft.provider === "openai") && <Globe className="ml-auto h-3 w-3 shrink-0 text-primary/50" />}
                               </button>
                             ))}
                           </motion.div>
@@ -474,15 +482,19 @@ export function ProjectSidebar({
                   )}
                 </div>
 
-                {/* Web Grounding (only for OpenRouter) */}
-                {draft.provider === "openrouter" && selectedModel && (
+                {/* Web Grounding (OpenRouter + OpenAI) */}
+                {(draft.provider === "openrouter" || draft.provider === "openai") && selectedModel && (
                   <div className="flex items-start justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2.5">
                     <div className="flex items-start gap-2">
                       <Globe className="h-3.5 w-3.5 mt-0.5 text-primary/60 shrink-0" />
                       <div>
                         <div className="font-mono text-[11px] font-bold text-foreground">Web Grounding</div>
                         <div className="font-mono text-[9px] text-muted-foreground mt-0.5 leading-relaxed">
-                          {selectedModel.supportsGrounding ? "Adds :online for live search" : "Not available for this model"}
+                          {selectedModel.supportsGrounding
+                            ? draft.provider === "openai"
+                              ? `Uses ${selectedModel.groundingModelId ?? "search-preview"} for live web access`
+                              : "Adds :online for live search"
+                            : "Not available for this model"}
                         </div>
                       </div>
                     </div>

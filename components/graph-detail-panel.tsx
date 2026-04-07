@@ -4,7 +4,7 @@ import * as React from "react"
 import { createPortal } from "react-dom"
 import { CONTENT_TYPE_CONFIG, type ContentType } from "@/lib/content-types"
 import type { TextBlock } from "@/components/tile-card"
-import { ExternalLink, Link as LinkIcon, Pin, RefreshCw, Tag, X } from "lucide-react"
+import { Link as LinkIcon, Pin, RefreshCw, Tag, X } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
@@ -312,27 +312,6 @@ export function GraphDetailPanel({
                 </ReactMarkdown>
               </div>
             )}
-          </div>
-        )}
-
-        {/* Sources */}
-        {block.sources && block.sources.length > 0 && (
-          <div className="px-4 pb-3 space-y-1.5">
-            <div className="h-px bg-border/40 mb-3" />
-            <div className="space-y-1">
-              {block.sources.map((src, i) => (
-                <a
-                  key={i}
-                  href={src.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 rounded-sm bg-secondary/40 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors group"
-                >
-                  <ExternalLink className="h-3 w-3 flex-shrink-0 opacity-50 group-hover:opacity-80" />
-                  <span className="truncate">{src.title || src.siteName || src.url}</span>
-                </a>
-              ))}
-            </div>
           </div>
         )}
 
