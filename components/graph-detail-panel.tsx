@@ -192,7 +192,7 @@ export function GraphDetailPanel({
             {config.label}
           </span>
           {/* Category tag — read-only, updated by AI on enrichment */}
-          <span className="rounded-sm bg-black/10 px-1.5 py-0.5 font-mono text-[8px] font-black uppercase tracking-tighter opacity-60">
+          <span className="rounded-sm bg-surface-overlay px-1.5 py-0.5 font-mono text-[8px] font-black uppercase tracking-tighter opacity-60">
             #{block.category || "no-topic"}
           </span>
         </div>
@@ -207,7 +207,7 @@ export function GraphDetailPanel({
               }
               setIsTypePickerOpen(v => !v)
             }}
-            className={`p-1 rounded-sm transition-opacity ${isTypePickerOpen ? "opacity-100 bg-black/20" : "opacity-40 hover:opacity-90"}`}
+            className={`p-1 rounded-sm transition-opacity ${isTypePickerOpen ? "opacity-100 bg-surface-overlay-strong" : "opacity-40 hover:opacity-90"}`}
             title="Change type"
           >
             <Tag className="h-3 w-3" />

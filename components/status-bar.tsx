@@ -6,7 +6,7 @@ import { CONTENT_TYPE_CONFIG } from "@/lib/content-types"
 import type { TextBlock } from "@/components/tile-card"
 import { AboutPanel } from "@/components/about-panel"
 
-import { Menu, LayoutList, Sparkles } from "lucide-react"
+import { Menu, LayoutList, Sparkles, Sun, Moon } from "lucide-react"
 
 interface StatusBarProps {
   blockCount: number
@@ -41,6 +41,19 @@ export function StatusBar({
 }: StatusBarProps) {
   const [time, setTime] = useState("")
   const [isAboutOpen, setIsAboutOpen] = useState(false)
+  const [isDark, setIsDark] = useState(true)
+
+  // Sync theme state after mount (the inline script in layout.tsx sets the class before paint)
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains("dark"))
+  }, [])
+
+  const toggleTheme = () => {
+    const next = !isDark
+    setIsDark(next)
+    document.documentElement.classList.toggle("dark", next)
+    localStorage.setItem("nodepad-theme", next ? "dark" : "light")
+  }
 
   const activity = useMemo(() => {
     return {
@@ -153,7 +166,7 @@ export function StatusBar({
             )}
           </div>
         )}
-        <div className="flex items-center gap-2 border-l border-white/5 pl-4 ml-4">
+        <div className="flex items-center gap-2 border-l border-border/60 pl-4 ml-4">
           {/* Model indicator */}
           {modelLabel && (
             <span className="font-mono text-[9px] text-muted-foreground/60 uppercase tracking-wider px-1.5">
@@ -190,6 +203,14 @@ export function StatusBar({
             title="Workspace Index"
           >
             <LayoutList className="h-4 w-4" />
+          </button>
+
+          <button
+            onClick={toggleTheme}
+            className="p-1.5 rounded-sm transition-all duration-200 hover:bg-secondary text-muted-foreground/50 hover:text-foreground"
+            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
 
           <span className="w-px h-4 bg-border/60 mx-0.5" />

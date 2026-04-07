@@ -72,7 +72,7 @@ export function TileIndex({ blocks, onHighlight, highlightedId, onClose, isOpen,
         opacity: isOpen ? 1 : 0,
         visibility: isOpen ? "visible" : "hidden"
       }}
-      className="flex flex-col h-full bg-black/20 backdrop-blur-3xl border-l border-border shrink-0 overflow-hidden relative z-50 transition-all duration-200 ease-in-out"
+      className="flex flex-col h-full bg-card/80 backdrop-blur-3xl border-l border-border shrink-0 overflow-hidden relative z-50 transition-all duration-200 ease-in-out"
     >
       <div className="w-[240px] flex flex-col h-full">
         {/* Header */}
@@ -80,7 +80,7 @@ export function TileIndex({ blocks, onHighlight, highlightedId, onClose, isOpen,
           {onClose && (
             <button 
               onClick={onClose}
-              className="p-1 px-1.5 hover:bg-white/5 rounded-sm transition-colors text-muted-foreground/30 hover:text-white"
+              className="p-1 px-1.5 hover:bg-secondary rounded-sm transition-colors text-muted-foreground/30 hover:text-foreground"
               title="Close Index"
             >
               <X className="h-3.5 w-3.5" />
@@ -105,7 +105,7 @@ export function TileIndex({ blocks, onHighlight, highlightedId, onClose, isOpen,
                  <button
                     key={col.id}
                     onClick={() => scrollToColumn(col.id)}
-                    className="flex items-center gap-2.5 w-full px-2.5 py-2.5 rounded-sm transition-all hover:bg-white/5 text-left text-foreground/60 hover:text-foreground group"
+                    className="flex items-center gap-2.5 w-full px-2.5 py-2.5 rounded-sm transition-all hover:bg-secondary/50 text-left text-foreground/60 hover:text-foreground group"
                  >
                    <col.icon className="h-3 w-3 text-primary/40 group-hover:text-primary transition-colors" />
                    <span className="font-mono text-[11px] font-bold uppercase tracking-tight">{col.label}</span>
@@ -122,7 +122,7 @@ export function TileIndex({ blocks, onHighlight, highlightedId, onClose, isOpen,
                     onMouseEnter={() => onHighlight(block.id)}
                     onMouseLeave={() => onHighlight(null)}
                     onClick={() => scrollToTile(block.id)}
-                    className={`flex items-start gap-2.5 w-full px-2.5 py-2 rounded-sm transition-all hover:bg-white/5 text-left group border-r-2 ${
+                    className={`flex items-start gap-2.5 w-full px-2.5 py-2 rounded-sm transition-all hover:bg-secondary/50 text-left group border-r-2 ${
                       highlightedId === block.id 
                         ? "bg-primary/10 border-primary shadow-[inset_0_1px_0px_rgba(255,255,255,0.05)]" 
                         : "border-transparent text-foreground/60 hover:text-foreground"

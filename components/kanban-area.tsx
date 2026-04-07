@@ -108,7 +108,7 @@ export function KanbanArea({
   }, [columns])
 
   return (
-    <div className="relative h-full w-full bg-[#050505] overflow-hidden">
+    <div className="relative h-full w-full bg-background overflow-hidden">
       {/* Scrollable Container */}
       <div 
         ref={containerRef}
@@ -197,7 +197,7 @@ export function KanbanArea({
             </div>
 
 
-            <p className="text-[13px] text-white uppercase tracking-[0.15em] whitespace-nowrap">
+            <p className="text-[13px] text-foreground uppercase tracking-[0.15em] whitespace-nowrap">
               {`type anything · #type to classify · ${mod}K for commands`}
             </p>
           </div>

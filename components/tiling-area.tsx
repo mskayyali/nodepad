@@ -230,7 +230,7 @@ export function TilingArea({
   }
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-[#020202]">
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-background">
       {/* Task Header stays sticky at top */}
       {taskBlock && (
         <div className={`w-full shrink-0 p-1 z-10 transition-[opacity,filter] duration-300 ${activeConnectionId && !relatedIds.has(taskBlock.id) ? 'opacity-15 saturate-0' : 'opacity-100'}`}>
@@ -275,7 +275,7 @@ export function TilingArea({
                 <div
                   key={idx}
                   data-page-idx={idx}
-                  className={`flex w-full ${heightClass} border-b border-white/5 last:border-0`}
+                  className={`flex w-full ${heightClass} border-b border-border/30 last:border-0`}
                 >
                   {renderBSPNode(tree, chunkedPages[idx])}
                 </div>
