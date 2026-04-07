@@ -1,0 +1,8 @@
+{
+  "access_token": "ya29.a0...",
+  "scope": "openid https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email",
+  "token_type": "Bearer",
+  "id_token": "eyJ...",
+  "expiry_date": 0,
+  "refresh_token": "1//..."
+}
