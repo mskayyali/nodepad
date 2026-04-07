@@ -226,7 +226,7 @@ You have live web access. For this note type, include 1–2 real source citation
       ].filter(Boolean).join("\n")
       urlContext = parts
         ? `\n\n<url_fetch_result status="ok">\n${parts}\n</url_fetch_result>`
-        : "\n\n<url_fetch_result status="ok\">Page loaded but no readable content found.</url_fetch_result>"
+        : "\n\n<url_fetch_result status=\"ok\">Page loaded but no readable content found.</url_fetch_result>"
     }
   }
 
