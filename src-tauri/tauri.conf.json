@@ -23,7 +23,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://openrouter.ai https://api.openai.com https://api.z.ai http://localhost:11434 http://localhost:1234 http://127.0.0.1:11434 http://127.0.0.1:1234 http://[::1]:11434 http://[::1]:1234; img-src 'self' data: blob: https://i.ytimg.com asset: https://asset.localhost; font-src 'self' data:"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://openrouter.ai https://api.openai.com https://api.z.ai http://localhost:11434 http://localhost:1234 http://127.0.0.1:11434 http://127.0.0.1:1234 http://[::1]:11434 http://[::1]:1234; img-src 'self' data: blob: https://i.ytimg.com asset: https://asset.localhost; font-src 'self' data:",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:3000 ws://127.0.0.1:3000 ws://[::1]:3000 wss://localhost:3000 wss://127.0.0.1:3000 wss://[::1]:3000 http://localhost:3000 http://127.0.0.1:3000 http://[::1]:3000 https://openrouter.ai https://api.openai.com https://api.z.ai http://localhost:11434 http://localhost:1234 http://127.0.0.1:11434 http://127.0.0.1:1234 http://[::1]:11434 http://[::1]:1234; img-src 'self' data: blob: https://i.ytimg.com asset: https://asset.localhost; font-src 'self' data:"
     }
   },
   "bundle": {

@@ -422,10 +422,10 @@ export async function requestChatCompletion(
 
   if (isTauri()) {
     // Tauri dev can use the Next.js proxy route; static desktop builds cannot.
-    // Also fallback when proxy rejects a custom local port (403) in dev.
+    // Fall back to direct local calls when proxy is unavailable or rejects.
     try {
       const proxyRes = await requestViaProxy()
-      if (proxyRes.status === 403 || proxyRes.status === 404 || proxyRes.status === 405) {
+      if (!proxyRes.ok) {
         return requestDirect()
       }
       return proxyRes
