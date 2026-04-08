@@ -1,10 +1,10 @@
 [package]
 name = "app"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+description = "nodepad desktop app"
+authors = ["Saleh Kayyali"]
+license = "MIT"
+repository = "https://github.com/mskayyali/nodepad"
 edition = "2021"
 rust-version = "1.77.2"
 

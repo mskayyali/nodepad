@@ -7,20 +7,19 @@ import { NextRequest, NextResponse } from "next/server"
  *
  * Security:
  * - Disabled entirely in production (NODE_ENV check)
- * - Only proxies to localhost targets on ports 11434/1234
+ * - Only proxies to localhost targets
  *
  * POST { targetUrl: string, body: object }
  */
 
 const ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"])
-const ALLOWED_PORTS = new Set(["11434", "1234"])
 
 function isAllowedTarget(raw: string): boolean {
   try {
     const url = new URL(raw)
     if (url.protocol !== "http:") return false
+    if (url.username || url.password) return false
     if (!ALLOWED_HOSTS.has(url.hostname)) return false
-    if (!ALLOWED_PORTS.has(url.port)) return false
     return true
   } catch {
     return false

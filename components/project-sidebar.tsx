@@ -110,8 +110,12 @@ export function ProjectSidebar({
         .then(models => {
           if (cancelled) return
           setLocalModels(models)
-          if (models.length > 0 && !models.some(m => m.id === draft.modelId)) {
-            setDraft(d => ({ ...d, modelId: models[0].id }))
+          if (models.length > 0) {
+            setDraft(d => (
+              models.some(m => m.id === d.modelId)
+                ? d
+                : { ...d, modelId: models[0].id }
+            ))
           }
         })
         .finally(() => {
@@ -417,7 +421,7 @@ export function ProjectSidebar({
                   <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
                     <input
                       type="text"
-                      value={draft.customBaseUrl || currentPreset.baseUrl}
+                      value={draft.customBaseUrl}
                       onChange={e => setDraft(d => ({ ...d, customBaseUrl: e.target.value }))}
                       placeholder={currentPreset.baseUrl}
                       className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
@@ -446,8 +450,12 @@ export function ProjectSidebar({
                           fetchLocalModels(draft.provider, draft.customBaseUrl || undefined)
                             .then(models => {
                               setLocalModels(models)
-                              if (models.length > 0 && !models.some(m => m.id === draft.modelId)) {
-                                setDraft(d => ({ ...d, modelId: models[0].id }))
+                              if (models.length > 0) {
+                                setDraft(d => (
+                                  models.some(m => m.id === d.modelId)
+                                    ? d
+                                    : { ...d, modelId: models[0].id }
+                                ))
                               }
                             })
                             .catch(() => {
