@@ -23,7 +23,10 @@ import {
   AI_PROVIDER_PRESETS,
   getModelsForProvider,
   getPreset,
+  isLocalProvider,
+  fetchLocalModels,
   type AISettings,
+  type AIModel,
   type AIProvider,
 } from "@/lib/ai-settings"
 
@@ -75,6 +78,9 @@ export function ProjectSidebar({
   const [providerOpen, setProviderOpen] = useState(false)
   // local draft for settings (only save on "Save")
   const [draft, setDraft] = useState<AISettings>(aiSettings)
+  // Dynamically fetched models for local providers (Ollama / LM Studio)
+  const [localModels, setLocalModels] = useState<AIModel[]>([])
+  const [localModelsLoading, setLocalModelsLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -88,6 +94,26 @@ export function ProjectSidebar({
   useEffect(() => {
     if (showSettings) setDraft(aiSettings)
   }, [showSettings])
+
+  // Fetch installed models when a local provider is selected
+  useEffect(() => {
+    if (!isLocalProvider(draft.provider)) {
+      setLocalModels([])
+      return
+    }
+    let cancelled = false
+    setLocalModelsLoading(true)
+    fetchLocalModels(draft.provider, draft.customBaseUrl || undefined).then(models => {
+      if (cancelled) return
+      setLocalModels(models)
+      // Auto-select first model if none is set or current selection isn't in the list
+      if (models.length > 0 && !models.some(m => m.id === draft.modelId)) {
+        setDraft(d => ({ ...d, modelId: models[0].id }))
+      }
+      setLocalModelsLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [draft.provider, draft.customBaseUrl])
 
   // Jump straight to settings when requested externally
   useEffect(() => {
@@ -118,7 +144,8 @@ export function ProjectSidebar({
   }
 
   const currentPreset = getPreset(draft.provider)
-  const models = getModelsForProvider(draft.provider)
+  const isLocal = isLocalProvider(draft.provider)
+  const models = isLocal ? localModels : getModelsForProvider(draft.provider)
   const selectedModel = models.find(m => m.id === draft.modelId) || models[0] || undefined
 
   return (
@@ -309,15 +336,16 @@ export function ProjectSidebar({
                               key={preset.id}
                               onClick={() => {
                                 const newModels = getModelsForProvider(preset.id)
+                                const isLocal = isLocalProvider(preset.id)
                                 setDraft(d => ({
                                   ...d,
                                   provider: preset.id,
                                   modelId: newModels[0]?.id ?? d.modelId,
-                                  webGrounding: d.webGrounding,
+                                  webGrounding: isLocal ? false : d.webGrounding,
                                   customBaseUrl: "",
-                                  // Restore the saved key for this provider if one exists,
-                                  // otherwise clear so the user knows to enter a new one.
-                                  apiKey: d.providerKeys?.[preset.id] ?? "",
+                                  // Local providers don't need an API key; cloud providers
+                                  // restore the saved key or clear for new entry.
+                                  apiKey: isLocal ? "local" : (d.providerKeys?.[preset.id] ?? ""),
                                 }))
                                 setProviderOpen(false)
                               }}
@@ -337,7 +365,8 @@ export function ProjectSidebar({
                   </div>
                 </div>
 
-                {/* API Key */}
+                {/* API Key — hidden for local providers */}
+                {!isLocalProvider(draft.provider) && (
                 <div className="flex flex-col gap-2">
                   <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
                     API Key
@@ -368,13 +397,77 @@ export function ProjectSidebar({
                     )}
                   </p>
                 </div>
+                )}
+
+                {/* Base URL — shown for local providers */}
+                {isLocalProvider(draft.provider) && (
+                <div className="flex flex-col gap-2">
+                  <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                    Server URL
+                  </label>
+                  <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                    <input
+                      type="text"
+                      value={draft.customBaseUrl || currentPreset.baseUrl}
+                      onChange={e => setDraft(d => ({ ...d, customBaseUrl: e.target.value }))}
+                      placeholder={currentPreset.baseUrl}
+                      className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
+                  <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
+                    {draft.provider === "ollama"
+                      ? "Make sure Ollama is running. Default: http://localhost:11434/v1"
+                      : "Make sure LM Studio server is running. Default: http://localhost:1234/v1"}
+                  </p>
+                </div>
+                )}
 
                 {/* Model Selector */}
                 <div className="flex flex-col gap-2">
-                  <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                    Model
-                  </label>
-                  {models.length === 0 ? (
+                  <div className="flex items-center justify-between">
+                    <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                      Model
+                    </label>
+                    {isLocal && (
+                      <button
+                        onClick={() => {
+                          setLocalModelsLoading(true)
+                          fetchLocalModels(draft.provider, draft.customBaseUrl || undefined).then(models => {
+                            setLocalModels(models)
+                            if (models.length > 0 && !models.some(m => m.id === draft.modelId)) {
+                              setDraft(d => ({ ...d, modelId: models[0].id }))
+                            }
+                            setLocalModelsLoading(false)
+                          })
+                        }}
+                        className="font-mono text-[9px] text-primary hover:text-primary/80 transition-colors"
+                      >
+                        {localModelsLoading ? "Fetching…" : "Refresh"}
+                      </button>
+                    )}
+                  </div>
+                  {isLocal && localModelsLoading ? (
+                    <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2">
+                      <span className="font-mono text-[11px] text-muted-foreground">Fetching models…</span>
+                    </div>
+                  ) : isLocal && models.length === 0 ? (
+                    <div className="flex flex-col gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2">
+                      <span className="font-mono text-[11px] text-muted-foreground">
+                        No models found. Is {draft.provider === "ollama" ? "Ollama" : "LM Studio"} running?
+                      </span>
+                      <input
+                        type="text"
+                        value={draft.modelId}
+                        onChange={e => setDraft(d => ({ ...d, modelId: e.target.value }))}
+                        placeholder="Or type a model name manually"
+                        className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40 border-t border-white/5 pt-1.5 mt-0.5"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                  ) : models.length === 0 ? (
                     <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
                       <input
                         type="text"
@@ -467,12 +560,16 @@ export function ProjectSidebar({
 
                 {/* API Status */}
                 <div className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${
-                  draft.apiKey
+                  draft.apiKey || isLocalProvider(draft.provider)
                     ? "bg-primary/10 border border-primary/20 text-primary"
                     : "bg-white/5 border border-white/5 text-muted-foreground"
                 }`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${draft.apiKey ? "bg-primary animate-pulse" : "bg-white/30"}`} />
-                  {draft.apiKey ? `${currentPreset.label} — API key configured` : "No API key — AI disabled"}
+                  <span className={`h-1.5 w-1.5 rounded-full ${draft.apiKey || isLocalProvider(draft.provider) ? "bg-primary animate-pulse" : "bg-white/30"}`} />
+                  {isLocalProvider(draft.provider)
+                    ? `${currentPreset.label} — local server`
+                    : draft.apiKey
+                      ? `${currentPreset.label} — API key configured`
+                      : "No API key — AI disabled"}
                 </div>
               </motion.div>
             )}

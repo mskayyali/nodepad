@@ -9,6 +9,10 @@ app/design-system/
 # Common ignores
 node_modules/
 .next/
+out/
+
+# Tauri
+src-tauri/target/
 .env*.local
 .DS_Store
 .claude/

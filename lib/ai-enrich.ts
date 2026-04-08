@@ -1,7 +1,7 @@
 "use client"
 
 import { detectContentType } from "@/lib/detect-content-type"
-import { loadAIConfig, getBaseUrl, getProviderHeaders, getModelsForProvider } from "@/lib/ai-settings"
+import { loadAIConfig, getBaseUrl, getProviderHeaders, getModelsForProvider, isLocalProvider } from "@/lib/ai-settings"
 import type { ContentType } from "@/lib/content-types"
 
 // ── Language detection ────────────────────────────────────────────────────────
@@ -239,6 +239,7 @@ export async function enrichBlockClient(
   }
 
   const supportsJsonSchema = config.provider === "openrouter" || config.provider === "openai"
+  const isLocal = isLocalProvider(config.provider)
   // gpt-*-search-preview models have known issues with strict json_schema + web_search_options;
   // fall back to json_object mode (guaranteed valid JSON, no schema enforcement)
   const useStrictSchema = supportsJsonSchema && !webSearchOptions
@@ -252,7 +253,7 @@ You have live web access. For this note type, include 1–2 real source citation
   // OpenAI requires the word "json" to appear in the messages when using
   // response_format: json_object — this covers both non-schema providers AND
   // the grounded OpenAI path where search-preview models can't use json_schema.
-  const schemaHint = !useStrictSchema
+  const schemaHint = (!useStrictSchema || isLocal)
     ? `\n\n## Output Format — CRITICAL\nYou MUST respond with a single JSON object (no markdown, no explanation). Schema:\n${JSON.stringify(JSON_SCHEMA.schema, null, 2)}`
     : ""
 
@@ -301,19 +302,18 @@ You have live web access. For this note type, include 1–2 real source citation
   const userMessage = `${langDirective}<note_to_enrich>${safeText}</note_to_enrich>${urlContext}${categoryContext}${forcedTypeContext}${globalContext}`
 
   const baseUrl = getBaseUrl(config)
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: getProviderHeaders(config),
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user",   content: userMessage },
-      ],
-      // OpenAI search-preview models reject both response_format AND temperature;
-      // when web_search_options is present, omit both and rely on the schemaHint
-      // in the system prompt to get structured JSON output.
-      ...(webSearchOptions === undefined
+  const chatBody = {
+    model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user",   content: userMessage },
+    ],
+    // Local providers rely on the schemaHint in the system prompt.
+    // OpenAI search-preview models reject both response_format AND temperature;
+    // when web_search_options is present, omit both.
+    ...(isLocal
+      ? { temperature: 0.1 }
+      : webSearchOptions === undefined
         ? {
             response_format: useStrictSchema
               ? { type: "json_schema", json_schema: JSON_SCHEMA }
@@ -321,8 +321,20 @@ You have live web access. For this note type, include 1–2 real source citation
             temperature: 0.1,
           }
         : { web_search_options: webSearchOptions }),
-    }),
-  })
+  }
+
+  // Local providers go through our server proxy to bypass CORS
+  const response = isLocal
+    ? await fetch("/api/local-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUrl: `${baseUrl}/chat/completions`, body: chatBody }),
+      })
+    : await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: getProviderHeaders(config),
+        body: JSON.stringify(chatBody),
+      })
 
   if (!response.ok) {
     const err = await response.text()

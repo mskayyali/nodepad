@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -38,6 +41,7 @@
     "@radix-ui/react-toggle-group": "1.1.11",
     "@radix-ui/react-tooltip": "1.2.8",
     "@tailwindcss/typography": "^0.5.19",
+    "@tauri-apps/api": "^2.10.1",
     "@types/d3": "^7.4.3",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
@@ -66,6 +70,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.0",
+    "@tauri-apps/cli": "^2.10.1",
     "@types/node": "^22",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",

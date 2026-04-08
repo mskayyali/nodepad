@@ -1,6 +1,6 @@
 "use client"
 
-import { loadAIConfig, getBaseUrl, getProviderHeaders } from "@/lib/ai-settings"
+import { loadAIConfig, getBaseUrl, getProviderHeaders, isLocalProvider } from "@/lib/ai-settings"
 
 export interface GhostContext {
   text: string
@@ -51,16 +51,26 @@ Return ONLY valid JSON:
 {"text": "...", "category": "..."}`
 
   const baseUrl = getBaseUrl(config)
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: getProviderHeaders(config),
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-    }),
-  })
+  const isLocal = isLocalProvider(config.provider)
+  const chatBody = {
+    model,
+    messages: [{ role: "user", content: prompt }],
+    ...(isLocal ? {} : { response_format: { type: "json_object" } }),
+    temperature: 0.7,
+  }
+
+  // Local providers go through our server proxy to bypass CORS
+  const response = isLocal
+    ? await fetch("/api/local-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUrl: `${baseUrl}/chat/completions`, body: chatBody }),
+      })
+    : await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: getProviderHeaders(config),
+        body: JSON.stringify(chatBody),
+      })
 
   if (!response.ok) {
     const err = await response.text()

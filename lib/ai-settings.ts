@@ -12,7 +12,7 @@ export interface AIModel {
   groundingModelId?: string
 }
 
-export type AIProvider = "openrouter" | "openai" | "zai"
+export type AIProvider = "openrouter" | "openai" | "zai" | "ollama" | "lmstudio"
 
 export interface AIProviderPreset {
   id: AIProvider
@@ -43,6 +43,20 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     baseUrl: "https://api.z.ai/api/paas/v4",
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     keyPlaceholder: "Your Z.ai API key",
+  },
+  {
+    id: "ollama",
+    label: "Ollama",
+    baseUrl: "http://localhost:11434/v1",
+    keyUrl: "",
+    keyPlaceholder: "No key needed (leave as-is)",
+  },
+  {
+    id: "lmstudio",
+    label: "LM Studio",
+    baseUrl: "http://localhost:1234/v1",
+    keyUrl: "",
+    keyPlaceholder: "No key needed (leave as-is)",
   },
 ]
 
@@ -160,9 +174,57 @@ export const ZAI_MODELS: AIModel[] = [
 ]
 
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
-  if (provider === "openai") return OPENAI_MODELS
-  if (provider === "zai")    return ZAI_MODELS
+  if (provider === "openai")   return OPENAI_MODELS
+  if (provider === "zai")      return ZAI_MODELS
+  // Local providers return [] — models are fetched dynamically via fetchLocalModels()
+  if (provider === "ollama" || provider === "lmstudio") return []
   return AI_MODELS // openrouter + safe fallback for any stale localStorage value
+}
+
+/**
+ * Fetch installed models from a local provider (Ollama or LM Studio).
+ * Routes through /api/local-models to bypass CORS restrictions that
+ * local servers impose on browser requests.
+ */
+export async function fetchLocalModels(
+  provider: AIProvider,
+  customBaseUrl?: string,
+): Promise<AIModel[]> {
+  try {
+    const res = await fetch("/api/local-models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, baseUrl: customBaseUrl }),
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+
+    if (provider === "ollama") {
+      const models = (data.models ?? []) as Array<{ name: string; details?: { parameter_size?: string; family?: string } }>
+      return models.map(m => ({
+        id: m.name,
+        label: m.name,
+        shortLabel: m.name.split(":")[0],
+        description: m.details?.parameter_size
+          ? `${m.details.parameter_size}${m.details.family ? ` · ${m.details.family}` : ""}`
+          : "Local model",
+        supportsGrounding: false,
+      }))
+    }
+
+    // LM Studio (OpenAI-compatible format)
+    const models = (data.data ?? []) as Array<{ id: string }>
+    return models.map(m => ({
+      id: m.id,
+      label: m.id,
+      shortLabel: m.id.split("/").pop() || m.id,
+      description: "Local model",
+      supportsGrounding: false,
+    }))
+  } catch {
+    return []
+  }
 }
 
 export const DEFAULT_MODEL_ID = "openai/gpt-4o"
@@ -201,17 +263,19 @@ export interface AIConfig {
   customBaseUrl: string
 }
 
+const LOCAL_PROVIDERS = new Set<AIProvider>(["ollama", "lmstudio"])
+
+export function isLocalProvider(provider: AIProvider): boolean {
+  return LOCAL_PROVIDERS.has(provider)
+}
+
 export function loadAIConfig(): AIConfig | null {
   const s = loadSettings()
-  if (!s.apiKey) return null
+  // Local providers don't need an API key
+  if (!s.apiKey && !isLocalProvider(s.provider)) return null
   const models = getModelsForProvider(s.provider)
   const model = models.find(m => m.id === s.modelId)
-  // Use the matched model's id if found; otherwise fall back to the first model
-  // for this provider.  This handles the case where localStorage still holds an
-  // OpenRouter-prefixed id (e.g. "openai/gpt-4o") after switching to OpenAI —
-  // that string won't match any entry in OPENAI_MODELS so we fall back to "gpt-4o".
   const modelId = model?.id ?? models[0]?.id ?? s.modelId ?? DEFAULT_MODEL_ID
-  // Z.ai does not support grounding; only openrouter and openai do
   const supportsGrounding =
     (s.provider === "openrouter" || s.provider === "openai") &&
     s.webGrounding &&
@@ -220,13 +284,18 @@ export function loadAIConfig(): AIConfig | null {
 }
 
 export function getBaseUrl(config: AIConfig): string {
+  // Prefer user-supplied custom URL (e.g. different port for Ollama/LM Studio)
+  if (config.customBaseUrl) return config.customBaseUrl
   return getPreset(config.provider).baseUrl
 }
 
 export function getProviderHeaders(config: AIConfig): Record<string, string> {
   const base: Record<string, string> = {
     "Content-Type": "application/json",
-    "Authorization": `Bearer ${config.apiKey}`,
+  }
+  // Local providers don't need auth; Ollama ignores it, LM Studio accepts a dummy key
+  if (!isLocalProvider(config.provider)) {
+    base["Authorization"] = `Bearer ${config.apiKey}`
   }
   if (config.provider === "openrouter") {
     base["HTTP-Referer"] = "https://nodepad.space"
