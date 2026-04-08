@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server"
  *
  * Security:
  * - Disabled in production by default; opt-in with NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD=1
- * - Only proxies to localhost targets on provider-default ports
+ * - Only proxies to localhost targets (provider-default ports in production)
  *
  * POST { provider: "ollama" | "lmstudio", baseUrl?: string }
  */
@@ -23,8 +23,9 @@ const ALLOWED_PORTS: Record<LocalProvider, string> = {
   ollama: "11434",
   lmstudio: "1234",
 }
+const IS_PRODUCTION = process.env.NODE_ENV === "production"
 const ENABLE_IN_PROD =
-  process.env.NODE_ENV !== "production" ||
+  !IS_PRODUCTION ||
   process.env.NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD === "1" ||
   process.env.NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD === "true"
 
@@ -39,7 +40,10 @@ function normalizeAndValidateBaseUrl(provider: LocalProvider, baseUrl?: string):
     if (url.protocol !== "http:") return null
     if (url.username || url.password) return null
     if (!ALLOWED_HOSTS.has(url.hostname)) return null
-    if (url.port !== ALLOWED_PORTS[provider]) return null
+    if (!url.port) return null
+    const port = Number(url.port)
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return null
+    if (IS_PRODUCTION && url.port !== ALLOWED_PORTS[provider]) return null
     if (url.search || url.hash) return null
     return url
   } catch {
@@ -72,8 +76,11 @@ export async function POST(req: NextRequest) {
   const customBaseUrl = typeof payload.baseUrl === "string" ? payload.baseUrl : undefined
   const baseUrl = normalizeAndValidateBaseUrl(provider, customBaseUrl)
   if (!baseUrl) {
+    const message = IS_PRODUCTION
+      ? "Only localhost Ollama/LM Studio URLs with default ports are allowed in production"
+      : "Only localhost URLs with explicit ports are allowed"
     return NextResponse.json(
-      { error: "Only localhost Ollama/LM Studio URLs with default ports are allowed" },
+      { error: message },
       { status: 403 },
     )
   }

@@ -352,7 +352,8 @@ export function loadAIConfig(): AIConfig | null {
 }
 
 export function getBaseUrl(config: AIConfig): string {
-  // Prefer user-supplied custom URL (e.g. different port for Ollama/LM Studio)
+  // Prefer user-supplied custom URL.
+  // Note: production web proxy mode may enforce provider-default ports server-side.
   const custom = config.customBaseUrl?.trim()
   if (custom) return custom
   return getPreset(config.provider).baseUrl
