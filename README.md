@@ -88,7 +88,11 @@ $env:NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD="1"; npm run start
 
 This enables `/api/local-*` proxy routes in production. They are loopback-only (`localhost` / `127.0.0.1` / `::1`).
 
-**Enable web grounding** (optional): toggle "Web grounding" in Settings to let the AI cite real sources for claims, questions, and references. Supported on OpenRouter `:online` models and OpenAI search-preview models.
+**Enable web grounding** (optional): toggle "Web grounding" in Settings to let the AI cite real sources for claims, questions, and references.
+
+- Works in browser and Tauri desktop.
+- Available only for OpenRouter `:online` models and OpenAI search-preview models.
+- Not available for Ollama / LM Studio local providers.
 
 ---
 
