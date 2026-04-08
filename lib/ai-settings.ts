@@ -179,6 +179,15 @@ export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
 }
 
+function hasLoopbackHttpOrigin(): boolean {
+  if (typeof window === "undefined") return false
+  const protocol = window.location?.protocol || ""
+  const hostname = (window.location?.hostname || "").replace(/^\[(.*)\]$/, "$1")
+  const isHttp = protocol === "http:" || protocol === "https:"
+  const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
+  return isHttp && isLoopback
+}
+
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
   if (provider === "openai")   return OPENAI_MODELS
   if (provider === "zai")      return ZAI_MODELS
@@ -248,19 +257,23 @@ export async function fetchLocalModels(
       })
 
     if (isTauri()) {
-      // Tauri dev has Next.js API routes; static desktop build does not.
-      // Prefer proxy when present, then fall back to direct local fetch.
-      try {
-        const proxyRes = await fetchProxy()
-        if (proxyRes.ok) {
-          data = await proxyRes.json()
-        } else if (proxyRes.status === 403 || proxyRes.status === 404 || proxyRes.status === 405) {
-          data = await fetchDirect()
-        } else {
-          throw new Error(await readErrorMessage(proxyRes))
-        }
-      } catch {
+      // Tauri dev (loopback http origin) has Next.js API routes.
+      // Tauri static desktop builds do not, so skip proxy there.
+      if (!hasLoopbackHttpOrigin()) {
         data = await fetchDirect()
+      } else {
+        try {
+          const proxyRes = await fetchProxy()
+          if (proxyRes.ok) {
+            data = await proxyRes.json()
+          } else if (proxyRes.status === 403 || proxyRes.status === 404 || proxyRes.status === 405) {
+            data = await fetchDirect()
+          } else {
+            throw new Error(await readErrorMessage(proxyRes))
+          }
+        } catch {
+          data = await fetchDirect()
+        }
       }
     } else {
       // Browser web app: always proxy through Next.js to avoid CORS issues.
@@ -460,6 +473,10 @@ export async function requestChatCompletion(
     })
 
   if (isTauri()) {
+    if (!hasLoopbackHttpOrigin()) {
+      return requestDirect()
+    }
+
     // Tauri dev can use the Next.js proxy route; static desktop builds cannot.
     // Fall back only when the proxy route itself is unavailable or blocked
     // by route-level guardrails; otherwise return proxy error as-is.

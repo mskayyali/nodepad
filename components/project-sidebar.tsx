@@ -84,6 +84,7 @@ export function ProjectSidebar({
   const [localModelsError, setLocalModelsError] = useState<string | null>(null)
   const localModelsRequestIdRef = useRef(0)
   const localModelsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const prevProviderRef = useRef<AIProvider>(draft.provider)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const clearLocalModelsTimer = () => {
@@ -150,8 +151,12 @@ export function ProjectSidebar({
   }, [showSettings, aiSettings])
 
   // Fetch installed models when a local provider is selected.
-  // Debounce URL changes (500ms) to avoid per-keystroke fetches.
+  // On provider switch: fetch immediately and clear stale models.
+  // On URL edits: debounce (500ms) to avoid per-keystroke fetches.
   useEffect(() => {
+    const providerChanged = prevProviderRef.current !== draft.provider
+    prevProviderRef.current = draft.provider
+
     if (!isLocalProvider(draft.provider)) {
       localModelsRequestIdRef.current += 1
       clearLocalModelsTimer()
@@ -160,7 +165,16 @@ export function ProjectSidebar({
       setLocalModelsError(null)
       return
     }
-    fetchLocalModelsLatest(draft.provider, draft.customBaseUrl, 500)
+
+    if (providerChanged) {
+      setLocalModels([])
+      setLocalModelsLoading(true)
+      setLocalModelsError(null)
+      fetchLocalModelsLatest(draft.provider, draft.customBaseUrl)
+    } else {
+      fetchLocalModelsLatest(draft.provider, draft.customBaseUrl, 500)
+    }
+
     return () => {
       clearLocalModelsTimer()
     }
