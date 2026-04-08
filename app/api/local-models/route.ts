@@ -33,13 +33,26 @@ function isLocalProvider(value: unknown): value is LocalProvider {
   return value === "ollama" || value === "lmstudio"
 }
 
+function isSameOriginRequest(req: NextRequest): boolean {
+  const origin = req.headers.get("origin")
+  if (origin && origin !== req.nextUrl.origin) return false
+
+  const secFetchSite = req.headers.get("sec-fetch-site")
+  if (secFetchSite && secFetchSite !== "same-origin" && secFetchSite !== "none") {
+    return false
+  }
+
+  return true
+}
+
 function normalizeAndValidateBaseUrl(provider: LocalProvider, baseUrl?: string): URL | null {
   const raw = baseUrl?.trim() || DEFAULT_BASE_URL[provider]
   try {
     const url = new URL(raw)
     if (url.protocol !== "http:") return null
     if (url.username || url.password) return null
-    if (!ALLOWED_HOSTS.has(url.hostname)) return null
+    const normalizedHost = url.hostname.replace(/^\[(.*)\]$/, "$1")
+    if (!ALLOWED_HOSTS.has(normalizedHost)) return null
     if (!url.port) return null
     const port = Number(url.port)
     if (!Number.isInteger(port) || port < 1 || port > 65535) return null
@@ -52,6 +65,13 @@ function normalizeAndValidateBaseUrl(provider: LocalProvider, baseUrl?: string):
 }
 
 export async function POST(req: NextRequest) {
+  if (!isSameOriginRequest(req)) {
+    return NextResponse.json(
+      { error: "Cross-site requests are not allowed for local proxy routes" },
+      { status: 403 },
+    )
+  }
+
   if (!ENABLE_IN_PROD) {
     return NextResponse.json(
       {

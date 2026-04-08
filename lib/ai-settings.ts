@@ -337,13 +337,23 @@ export function isLocalProvider(provider: AIProvider): provider is LocalProvider
   return LOCAL_PROVIDERS.has(provider)
 }
 
+function normalizeBaseUrl(url: string): string {
+  return url.trim().replace(/\/+$/, "")
+}
+
 export function loadAIConfig(): AIConfig | null {
   const s = loadSettings()
   // Local providers don't need an API key
   if (!s.apiKey && !isLocalProvider(s.provider)) return null
+  const rawModelId = s.modelId?.trim() || ""
+  if (isLocalProvider(s.provider) && !rawModelId) {
+    // Local providers require an explicit selected model.
+    return null
+  }
   const models = getModelsForProvider(s.provider)
-  const model = models.find(m => m.id === s.modelId)
-  const modelId = model?.id ?? models[0]?.id ?? s.modelId ?? DEFAULT_MODEL_ID
+  const model = models.find(m => m.id === rawModelId)
+  const candidateModelId = model?.id ?? models[0]?.id ?? rawModelId
+  const modelId = candidateModelId || DEFAULT_MODEL_ID
   const supportsGrounding =
     (s.provider === "openrouter" || s.provider === "openai") &&
     s.webGrounding &&
@@ -354,9 +364,9 @@ export function loadAIConfig(): AIConfig | null {
 export function getBaseUrl(config: AIConfig): string {
   // Prefer user-supplied custom URL.
   // Note: production web proxy mode may enforce provider-default ports server-side.
-  const custom = config.customBaseUrl?.trim()
+  const custom = normalizeBaseUrl(config.customBaseUrl || "")
   if (custom) return custom
-  return getPreset(config.provider).baseUrl
+  return normalizeBaseUrl(getPreset(config.provider).baseUrl)
 }
 
 export function getProviderHeaders(config: AIConfig): Record<string, string> {

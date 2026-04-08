@@ -55,7 +55,7 @@ const nextConfig = {
               // Local AI providers (Ollama/LM Studio) use same-origin /api proxies
               // in web mode (dev + self-hosted prod when enabled server-side).
               // In dev, also allow direct localhost connections as a fallback.
-              `connect-src 'self' https://openrouter.ai https://api.openai.com https://api.z.ai${isDev ? " http://localhost:11434 http://localhost:1234 http://127.0.0.1:11434 http://127.0.0.1:1234" : ""} https://cloud.umami.is https://api-gateway.umami.dev`,
+              `connect-src 'self' https://openrouter.ai https://api.openai.com https://api.z.ai${isDev ? " http://localhost:11434 http://localhost:1234 http://127.0.0.1:11434 http://127.0.0.1:1234 http://[::1]:11434 http://[::1]:1234" : ""} https://cloud.umami.is https://api-gateway.umami.dev`,
               "img-src 'self' data: blob: https://i.ytimg.com",
               "font-src 'self' data:",
               "frame-src https://www.youtube-nocookie.com https://www.youtube.com",

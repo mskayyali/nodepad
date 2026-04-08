@@ -18,7 +18,9 @@ export async function generateGhostClient(
   previousSyntheses: string[] = [],
 ): Promise<GhostResult> {
   const config = loadAIConfig()
-  if (!config) throw new Error("No API key configured")
+  if (!config) {
+    throw new Error("AI settings are incomplete. Set an API key for cloud providers, or select a local model for Ollama/LM Studio.")
+  }
 
   // Ghost falls back to a lighter model if none is set
   const model = config.modelId || "google/gemini-2.0-flash-lite-001"

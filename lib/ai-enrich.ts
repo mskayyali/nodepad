@@ -220,7 +220,9 @@ export async function enrichBlockClient(
   category?: string,
 ): Promise<EnrichResult> {
   const config = loadAIConfig()
-  if (!config) throw new Error("No API key configured")
+  if (!config) {
+    throw new Error("AI settings are incomplete. Set an API key for cloud providers, or select a local model for Ollama/LM Studio.")
+  }
 
   const detectedType = detectContentType(text)
   const effectiveType = forcedType || detectedType
