@@ -345,7 +345,7 @@ export function ProjectSidebar({
                                   customBaseUrl: "",
                                   // Local providers don't need an API key; cloud providers
                                   // restore the saved key or clear for new entry.
-                                  apiKey: isLocal ? "local" : (d.providerKeys?.[preset.id] ?? ""),
+                                  apiKey: isLocal ? "" : (d.providerKeys?.[preset.id] ?? ""),
                                 }))
                                 setProviderOpen(false)
                               }}

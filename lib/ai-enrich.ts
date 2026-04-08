@@ -1,7 +1,7 @@
 "use client"
 
 import { detectContentType } from "@/lib/detect-content-type"
-import { loadAIConfig, getBaseUrl, getProviderHeaders, getModelsForProvider, isLocalProvider } from "@/lib/ai-settings"
+import { loadAIConfig, getBaseUrl, getProviderHeaders, getModelsForProvider, isLocalProvider, isTauri } from "@/lib/ai-settings"
 import type { ContentType } from "@/lib/content-types"
 
 // ── Language detection ────────────────────────────────────────────────────────
@@ -323,8 +323,8 @@ You have live web access. For this note type, include 1–2 real source citation
         : { web_search_options: webSearchOptions }),
   }
 
-  // Local providers go through our server proxy to bypass CORS
-  const response = isLocal
+  // Local providers: call directly in Tauri (no CORS), proxy in browser
+  const response = isLocal && !isTauri()
     ? await fetch("/api/local-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

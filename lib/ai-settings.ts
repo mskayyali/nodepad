@@ -173,6 +173,11 @@ export const ZAI_MODELS: AIModel[] = [
   },
 ]
 
+/** True when running inside a Tauri desktop shell (no Next.js server available) */
+export function isTauri(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
+}
+
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
   if (provider === "openai")   return OPENAI_MODELS
   if (provider === "zai")      return ZAI_MODELS
@@ -183,25 +188,44 @@ export function getModelsForProvider(provider: AIProvider): AIModel[] {
 
 /**
  * Fetch installed models from a local provider (Ollama or LM Studio).
- * Routes through /api/local-models to bypass CORS restrictions that
- * local servers impose on browser requests.
+ * In the browser, routes through /api/local-models to bypass CORS.
+ * In Tauri (no Next.js server), calls the local server directly.
  */
 export async function fetchLocalModels(
   provider: AIProvider,
   customBaseUrl?: string,
 ): Promise<AIModel[]> {
   try {
-    const res = await fetch("/api/local-models", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider, baseUrl: customBaseUrl }),
-      signal: AbortSignal.timeout(6000),
-    })
-    if (!res.ok) return []
-    const data = await res.json()
+    let data: Record<string, unknown>
+
+    if (isTauri()) {
+      // Tauri: call local server directly (no CORS restrictions)
+      const preset = getPreset(provider)
+      const baseUrl = customBaseUrl || preset.baseUrl
+      if (provider === "ollama") {
+        const ollamaRoot = baseUrl.replace(/\/v1\/?$/, "")
+        const res = await fetch(`${ollamaRoot}/api/tags`, { signal: AbortSignal.timeout(5000) })
+        if (!res.ok) return []
+        data = await res.json()
+      } else {
+        const res = await fetch(`${baseUrl.replace(/\/$/, "")}/models`, { signal: AbortSignal.timeout(5000) })
+        if (!res.ok) return []
+        data = await res.json()
+      }
+    } else {
+      // Browser: proxy through Next.js API route to bypass CORS
+      const res = await fetch("/api/local-models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, baseUrl: customBaseUrl }),
+        signal: AbortSignal.timeout(6000),
+      })
+      if (!res.ok) return []
+      data = await res.json()
+    }
 
     if (provider === "ollama") {
-      const models = (data.models ?? []) as Array<{ name: string; details?: { parameter_size?: string; family?: string } }>
+      const models = ((data as { models?: unknown[] }).models ?? []) as Array<{ name: string; details?: { parameter_size?: string; family?: string } }>
       return models.map(m => ({
         id: m.name,
         label: m.name,
@@ -214,7 +238,7 @@ export async function fetchLocalModels(
     }
 
     // LM Studio (OpenAI-compatible format)
-    const models = (data.data ?? []) as Array<{ id: string }>
+    const models = ((data as { data?: unknown[] }).data ?? []) as Array<{ id: string }>
     return models.map(m => ({
       id: m.id,
       label: m.id,

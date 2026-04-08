@@ -1,6 +1,6 @@
 "use client"
 
-import { loadAIConfig, getBaseUrl, getProviderHeaders, isLocalProvider } from "@/lib/ai-settings"
+import { loadAIConfig, getBaseUrl, getProviderHeaders, isLocalProvider, isTauri } from "@/lib/ai-settings"
 
 export interface GhostContext {
   text: string
@@ -59,8 +59,8 @@ Return ONLY valid JSON:
     temperature: 0.7,
   }
 
-  // Local providers go through our server proxy to bypass CORS
-  const response = isLocal
+  // Local providers: call directly in Tauri (no CORS), proxy in browser
+  const response = isLocal && !isTauri()
     ? await fetch("/api/local-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
