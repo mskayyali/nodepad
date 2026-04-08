@@ -13,6 +13,7 @@ export interface AIModel {
 }
 
 export type AIProvider = "openrouter" | "openai" | "zai" | "ollama" | "lmstudio"
+export type LocalProvider = "ollama" | "lmstudio"
 
 export interface AIProviderPreset {
   id: AIProvider
@@ -229,7 +230,7 @@ export async function fetchLocalModels(
         const proxyRes = await fetchProxy()
         if (proxyRes.ok) {
           data = await proxyRes.json()
-        } else if (proxyRes.status === 404 || proxyRes.status === 405) {
+        } else if (proxyRes.status === 403 || proxyRes.status === 404 || proxyRes.status === 405) {
           data = await fetchDirect()
         } else {
           return []
@@ -309,7 +310,7 @@ export interface AIConfig {
 
 const LOCAL_PROVIDERS = new Set<AIProvider>(["ollama", "lmstudio"])
 
-export function isLocalProvider(provider: AIProvider): boolean {
+export function isLocalProvider(provider: AIProvider): provider is LocalProvider {
   return LOCAL_PROVIDERS.has(provider)
 }
 
@@ -347,6 +348,58 @@ export function getProviderHeaders(config: AIConfig): Record<string, string> {
     base["X-Title"] = "nodepad"
   }
   return base
+}
+
+/**
+ * Route chat-completions to the correct transport for each runtime.
+ * - Cloud providers: direct call to provider base URL.
+ * - Local providers in browser: /api/local-chat proxy (CORS-safe).
+ * - Local providers in Tauri: prefer proxy in dev, fallback to direct local call.
+ */
+export async function requestChatCompletion(
+  config: AIConfig,
+  chatBody: Record<string, unknown>,
+): Promise<Response> {
+  const baseUrl = getBaseUrl(config)
+
+  const requestDirect = () =>
+    fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: getProviderHeaders(config),
+      body: JSON.stringify(chatBody),
+      signal: isLocalProvider(config.provider) ? AbortSignal.timeout(120_000) : undefined,
+    })
+
+  if (!isLocalProvider(config.provider)) {
+    return requestDirect()
+  }
+
+  const requestViaProxy = () =>
+    fetch("/api/local-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider: config.provider,
+        baseUrl: config.customBaseUrl?.trim() || undefined,
+        body: chatBody,
+      }),
+    })
+
+  if (isTauri()) {
+    // Tauri dev can use the Next.js proxy route; static desktop builds cannot.
+    // Also fallback when proxy rejects a custom local port (403) in dev.
+    try {
+      const proxyRes = await requestViaProxy()
+      if (proxyRes.status === 403 || proxyRes.status === 404 || proxyRes.status === 405) {
+        return requestDirect()
+      }
+      return proxyRes
+    } catch {
+      return requestDirect()
+    }
+  }
+
+  return requestViaProxy()
 }
 
 /** @deprecated Use loadAIConfig() for direct browser → provider calls.

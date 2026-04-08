@@ -1,7 +1,7 @@
 "use client"
 
 import { detectContentType } from "@/lib/detect-content-type"
-import { loadAIConfig, getBaseUrl, getProviderHeaders, getModelsForProvider, isLocalProvider, isTauri } from "@/lib/ai-settings"
+import { loadAIConfig, getModelsForProvider, isLocalProvider, requestChatCompletion } from "@/lib/ai-settings"
 import type { ContentType } from "@/lib/content-types"
 
 // ── Language detection ────────────────────────────────────────────────────────
@@ -301,7 +301,6 @@ You have live web access. For this note type, include 1–2 real source citation
   const langDirective = `[RESPOND IN: ${language}]\n`
   const userMessage = `${langDirective}<note_to_enrich>${safeText}</note_to_enrich>${urlContext}${categoryContext}${forcedTypeContext}${globalContext}`
 
-  const baseUrl = getBaseUrl(config)
   const chatBody = {
     model,
     messages: [
@@ -323,44 +322,7 @@ You have live web access. For this note type, include 1–2 real source citation
         : { web_search_options: webSearchOptions }),
   }
 
-  let response: Response
-  if (isLocal) {
-    const requestViaProxy = () =>
-      fetch("/api/local-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetUrl: `${baseUrl}/chat/completions`, body: chatBody }),
-      })
-
-    if (isTauri()) {
-      // Tauri dev can use the Next.js proxy route; static desktop builds cannot.
-      // Fall back to direct local calls only when the proxy endpoint is missing.
-      try {
-        const proxyRes = await requestViaProxy()
-        response = (proxyRes.status === 404 || proxyRes.status === 405)
-          ? await fetch(`${baseUrl}/chat/completions`, {
-              method: "POST",
-              headers: getProviderHeaders(config),
-              body: JSON.stringify(chatBody),
-            })
-          : proxyRes
-      } catch {
-        response = await fetch(`${baseUrl}/chat/completions`, {
-          method: "POST",
-          headers: getProviderHeaders(config),
-          body: JSON.stringify(chatBody),
-        })
-      }
-    } else {
-      response = await requestViaProxy()
-    }
-  } else {
-    response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: getProviderHeaders(config),
-      body: JSON.stringify(chatBody),
-    })
-  }
+  const response = await requestChatCompletion(config, chatBody)
 
   if (!response.ok) {
     const err = await response.text()

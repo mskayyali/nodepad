@@ -86,7 +86,7 @@ NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD=1 npm run start
 $env:NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD="1"; npm run start
 ```
 
-This enables `/api/local-*` proxy routes in production. They are loopback-only (`localhost` / `127.0.0.1` / `::1`).
+This enables `/api/local-*` proxy routes in production. They are loopback-only (`localhost` / `127.0.0.1` / `::1`) and restricted to provider-default ports (`11434` for Ollama, `1234` for LM Studio).
 
 **Enable web grounding** (optional): toggle "Web grounding" in Settings to let the AI cite real sources for claims, questions, and references.
 

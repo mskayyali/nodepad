@@ -7,26 +7,43 @@ import { NextRequest, NextResponse } from "next/server"
  *
  * Security:
  * - Disabled in production by default; opt-in with NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD=1
- * - Only proxies to localhost targets
+ * - Only proxies to localhost targets on provider-default ports
  *
- * POST { targetUrl: string, body: object }
+ * POST { provider: "ollama" | "lmstudio", baseUrl?: string, body: object }
  */
 
+type LocalProvider = "ollama" | "lmstudio"
+
 const ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1", "::1"])
+const DEFAULT_BASE_URL: Record<LocalProvider, string> = {
+  ollama: "http://localhost:11434/v1",
+  lmstudio: "http://localhost:1234/v1",
+}
+const ALLOWED_PORTS: Record<LocalProvider, string> = {
+  ollama: "11434",
+  lmstudio: "1234",
+}
 const ENABLE_IN_PROD =
   process.env.NODE_ENV !== "production" ||
   process.env.NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD === "1" ||
   process.env.NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD === "true"
 
-function isAllowedTarget(raw: string): boolean {
+function isLocalProvider(value: unknown): value is LocalProvider {
+  return value === "ollama" || value === "lmstudio"
+}
+
+function normalizeAndValidateBaseUrl(provider: LocalProvider, baseUrl?: string): URL | null {
+  const raw = baseUrl?.trim() || DEFAULT_BASE_URL[provider]
   try {
     const url = new URL(raw)
-    if (url.protocol !== "http:") return false
-    if (url.username || url.password) return false
-    if (!ALLOWED_HOSTS.has(url.hostname)) return false
-    return true
+    if (url.protocol !== "http:") return null
+    if (url.username || url.password) return null
+    if (!ALLOWED_HOSTS.has(url.hostname)) return null
+    if (url.port !== ALLOWED_PORTS[provider]) return null
+    if (url.search || url.hash) return null
+    return url
   } catch {
-    return false
+    return null
   }
 }
 
@@ -41,26 +58,33 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  let payload: { targetUrl?: string; body?: Record<string, unknown> }
+  let payload: { provider?: unknown; baseUrl?: unknown; body?: unknown }
   try {
     payload = await req.json()
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  const targetUrl = payload.targetUrl?.trim()
-  const { body } = payload
+  if (!isLocalProvider(payload.provider)) {
+    return NextResponse.json({ error: "Invalid provider" }, { status: 400 })
+  }
+  const provider = payload.provider
+  const customBaseUrl = typeof payload.baseUrl === "string" ? payload.baseUrl : undefined
+  const body = payload.body
 
-  if (!targetUrl || typeof targetUrl !== "string") {
-    return NextResponse.json({ error: "targetUrl is required" }, { status: 400 })
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ error: "body must be a JSON object" }, { status: 400 })
   }
 
-  if (!isAllowedTarget(targetUrl)) {
+  const baseUrl = normalizeAndValidateBaseUrl(provider, customBaseUrl)
+  if (!baseUrl) {
     return NextResponse.json(
-      { error: "Only localhost Ollama/LM Studio URLs are allowed" },
+      { error: "Only localhost Ollama/LM Studio URLs with default ports are allowed" },
       { status: 403 },
     )
   }
+  const targetBase = `${baseUrl.origin}${baseUrl.pathname}`.replace(/\/$/, "")
+  const targetUrl = `${targetBase.replace(/\/v1\/?$/, "")}/v1/chat/completions`
 
   try {
     const res = await fetch(targetUrl, {
