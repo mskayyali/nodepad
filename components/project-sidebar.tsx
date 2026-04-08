@@ -106,7 +106,7 @@ export function ProjectSidebar({
     let cancelled = false
     const doFetch = () => {
       setLocalModelsLoading(true)
-      fetchLocalModels(draft.provider, draft.customBaseUrl || undefined)
+      fetchLocalModels(draft.provider, draft.customBaseUrl.trim() || undefined)
         .then(models => {
           if (cancelled) return
           setLocalModels(models)
@@ -158,6 +158,7 @@ export function ProjectSidebar({
 
   const currentPreset = getPreset(draft.provider)
   const isLocal = isLocalProvider(draft.provider)
+  const canSaveSettings = !isLocal || draft.modelId.trim().length > 0
   const models = isLocal ? localModels : getModelsForProvider(draft.provider)
   const selectedModel = models.find(m => m.id === draft.modelId) || models[0] || undefined
 
@@ -447,7 +448,7 @@ export function ProjectSidebar({
                       <button
                         onClick={() => {
                           setLocalModelsLoading(true)
-                          fetchLocalModels(draft.provider, draft.customBaseUrl || undefined)
+                          fetchLocalModels(draft.provider, draft.customBaseUrl.trim() || undefined)
                             .then(models => {
                               setLocalModels(models)
                               if (models.length > 0) {
@@ -605,11 +606,17 @@ export function ProjectSidebar({
             <div className="flex flex-col gap-1.5">
               <button
                 onClick={handleSaveSettings}
-                className="flex items-center justify-between w-full h-8 px-2.5 rounded-sm bg-primary hover:bg-primary/90 text-primary-foreground font-mono text-[9px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.98] shadow-sm"
+                disabled={!canSaveSettings}
+                className="flex items-center justify-between w-full h-8 px-2.5 rounded-sm bg-primary hover:bg-primary/90 text-primary-foreground font-mono text-[9px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.98] shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
               >
                 <span>Save Settings</span>
                 <Save className="h-3.5 w-3.5" />
               </button>
+              {!canSaveSettings && (
+                <p className="font-mono text-[8px] text-amber-400/90 leading-relaxed">
+                  Enter or select a local model before saving.
+                </p>
+              )}
               <button
                 onClick={() => setShowSettings(false)}
                 className="flex items-center justify-center w-full h-8 px-2.5 rounded-sm bg-white/5 hover:bg-white/10 text-muted-foreground font-mono text-[9px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.98] border border-white/5"

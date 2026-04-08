@@ -189,7 +189,8 @@ export function getModelsForProvider(provider: AIProvider): AIModel[] {
 /**
  * Fetch installed models from a local provider (Ollama or LM Studio).
  * In the browser, routes through /api/local-models to bypass CORS.
- * In Tauri (no Next.js server), calls the local server directly.
+ * In Tauri, prefers /api/local-models when available (dev mode with Next)
+ * and falls back to direct local calls for static desktop builds.
  */
 export async function fetchLocalModels(
   provider: AIProvider,
@@ -197,29 +198,48 @@ export async function fetchLocalModels(
 ): Promise<AIModel[]> {
   try {
     let data: Record<string, unknown>
+    const trimmedBaseUrl = customBaseUrl?.trim()
+    const preset = getPreset(provider)
+    const baseUrl = trimmedBaseUrl || preset.baseUrl
 
-    if (isTauri()) {
-      // Tauri: call local server directly (no CORS restrictions)
-      const preset = getPreset(provider)
-      const baseUrl = customBaseUrl || preset.baseUrl
+    const fetchDirect = async (): Promise<Record<string, unknown>> => {
       if (provider === "ollama") {
         const ollamaRoot = baseUrl.replace(/\/v1\/?$/, "")
         const res = await fetch(`${ollamaRoot}/api/tags`, { signal: AbortSignal.timeout(5000) })
-        if (!res.ok) return []
-        data = await res.json()
-      } else {
-        const res = await fetch(`${baseUrl.replace(/\/$/, "")}/models`, { signal: AbortSignal.timeout(5000) })
-        if (!res.ok) return []
-        data = await res.json()
+        if (!res.ok) throw new Error(`Ollama returned ${res.status}`)
+        return await res.json()
       }
-    } else {
-      // Browser: proxy through Next.js API route to bypass CORS
-      const res = await fetch("/api/local-models", {
+      const res = await fetch(`${baseUrl.replace(/\/$/, "")}/models`, { signal: AbortSignal.timeout(5000) })
+      if (!res.ok) throw new Error(`LM Studio returned ${res.status}`)
+      return await res.json()
+    }
+
+    const fetchProxy = async () =>
+      fetch("/api/local-models", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, baseUrl: customBaseUrl }),
+        body: JSON.stringify({ provider, baseUrl: trimmedBaseUrl }),
         signal: AbortSignal.timeout(6000),
       })
+
+    if (isTauri()) {
+      // Tauri dev has Next.js API routes; static desktop build does not.
+      // Prefer proxy when present, then fall back to direct local fetch.
+      try {
+        const proxyRes = await fetchProxy()
+        if (proxyRes.ok) {
+          data = await proxyRes.json()
+        } else if (proxyRes.status === 404 || proxyRes.status === 405) {
+          data = await fetchDirect()
+        } else {
+          return []
+        }
+      } catch {
+        data = await fetchDirect()
+      }
+    } else {
+      // Browser web app: always proxy through Next.js to avoid CORS issues.
+      const res = await fetchProxy()
       if (!res.ok) return []
       data = await res.json()
     }

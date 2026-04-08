@@ -6,13 +6,17 @@ import { NextRequest, NextResponse } from "next/server"
  * browser blocks direct fetch requests from the app.
  *
  * Security:
- * - Disabled entirely in production (NODE_ENV check)
+ * - Disabled in production by default; opt-in with NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD=1
  * - Only proxies to localhost targets
  *
  * POST { targetUrl: string, body: object }
  */
 
-const ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"])
+const ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1", "::1"])
+const ENABLE_IN_PROD =
+  process.env.NODE_ENV !== "production" ||
+  process.env.NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD === "1" ||
+  process.env.NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD === "true"
 
 function isAllowedTarget(raw: string): boolean {
   try {
@@ -27,9 +31,12 @@ function isAllowedTarget(raw: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  if (process.env.NODE_ENV === "production") {
+  if (!ENABLE_IN_PROD) {
     return NextResponse.json(
-      { error: "Local proxy is only available in development" },
+      {
+        error:
+          "Local proxy is disabled in production. Set NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD=1 to enable self-hosted local providers.",
+      },
       { status: 403 },
     )
   }
@@ -41,7 +48,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  const { targetUrl, body } = payload
+  const targetUrl = payload.targetUrl?.trim()
+  const { body } = payload
 
   if (!targetUrl || typeof targetUrl !== "string") {
     return NextResponse.json({ error: "targetUrl is required" }, { status: 400 })

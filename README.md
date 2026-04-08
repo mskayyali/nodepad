@@ -53,6 +53,8 @@ npm run tauri:build   # build a distributable .dmg / .msi / .AppImage
 
 **Local providers (Ollama / LM Studio)**: select Ollama or LM Studio from the provider dropdown. Make sure the server is running — your installed models will appear in the dropdown automatically. No API key needed. Local providers work in development (`npm run dev`) and the Tauri desktop app.
 
+For self-hosted production web deployments, set `NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD=1` on the Next.js server to enable `/api/local-*` proxy routes. These routes are loopback-only (`localhost` / `127.0.0.1` / `::1`), so they can only reach local model servers running on the same host as your Node.js process.
+
 **Enable web grounding** (optional): toggle "Web grounding" in Settings to let the AI cite real sources for claims, questions, and references. Supported on OpenRouter `:online` models and OpenAI search-preview models.
 
 ---

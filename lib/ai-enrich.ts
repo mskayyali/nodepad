@@ -323,18 +323,44 @@ You have live web access. For this note type, include 1–2 real source citation
         : { web_search_options: webSearchOptions }),
   }
 
-  // Local providers: call directly in Tauri (no CORS), proxy in browser
-  const response = isLocal && !isTauri()
-    ? await fetch("/api/local-chat", {
+  let response: Response
+  if (isLocal) {
+    const requestViaProxy = () =>
+      fetch("/api/local-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ targetUrl: `${baseUrl}/chat/completions`, body: chatBody }),
       })
-    : await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: getProviderHeaders(config),
-        body: JSON.stringify(chatBody),
-      })
+
+    if (isTauri()) {
+      // Tauri dev can use the Next.js proxy route; static desktop builds cannot.
+      // Fall back to direct local calls only when the proxy endpoint is missing.
+      try {
+        const proxyRes = await requestViaProxy()
+        response = (proxyRes.status === 404 || proxyRes.status === 405)
+          ? await fetch(`${baseUrl}/chat/completions`, {
+              method: "POST",
+              headers: getProviderHeaders(config),
+              body: JSON.stringify(chatBody),
+            })
+          : proxyRes
+      } catch {
+        response = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: getProviderHeaders(config),
+          body: JSON.stringify(chatBody),
+        })
+      }
+    } else {
+      response = await requestViaProxy()
+    }
+  } else {
+    response = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: getProviderHeaders(config),
+      body: JSON.stringify(chatBody),
+    })
+  }
 
   if (!response.ok) {
     const err = await response.text()
