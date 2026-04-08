@@ -53,6 +53,10 @@ npm run tauri:build   # build a distributable .dmg / .msi / .AppImage
 
 **Local providers (Ollama / LM Studio)**: select Ollama or LM Studio from the provider dropdown. Make sure the server is running — your installed models will appear in the dropdown automatically. No API key needed.
 
+By default, local providers work out of the box in `npm run dev` and in the Tauri desktop app.
+
+End users never need to set environment variables; they only use the app UI.
+
 How "local" works:
 
 - Tauri desktop app: local = the same computer running the app.
@@ -67,6 +71,8 @@ Self-hosted production web setup (host/admin only):
 ```bash
 echo "NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD=1" >> .env.production.local
 ```
+
+- Restart your production app process after setting the variable.
 
 - One-off startup (current shell only):
 
