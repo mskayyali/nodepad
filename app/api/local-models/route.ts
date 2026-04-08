@@ -78,14 +78,12 @@ export async function POST(req: NextRequest) {
     )
   }
   const targetBase = `${baseUrl.origin}${baseUrl.pathname}`.replace(/\/$/, "")
+  const targetRoot = targetBase.replace(/\/v1\/?$/, "")
 
   try {
-    let url: string
-    if (provider === "ollama") {
-      url = targetBase.replace(/\/v1\/?$/, "") + "/api/tags"
-    } else {
-      url = targetBase.replace(/\/$/, "") + "/models"
-    }
+    const url = provider === "ollama"
+      ? `${targetRoot}/api/tags`
+      : `${targetRoot}/v1/models`
 
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
     if (!res.ok) {

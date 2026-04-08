@@ -198,19 +198,42 @@ export async function fetchLocalModels(
   customBaseUrl?: string,
 ): Promise<AIModel[]> {
   try {
+    if (provider !== "ollama" && provider !== "lmstudio") return []
+
     let data: Record<string, unknown>
     const trimmedBaseUrl = customBaseUrl?.trim()
     const preset = getPreset(provider)
     const baseUrl = trimmedBaseUrl || preset.baseUrl
+    const serverRoot = baseUrl.replace(/\/v1\/?$/, "").replace(/\/$/, "")
+
+    const readErrorMessage = async (res: Response): Promise<string> => {
+      const fallback = `Local model fetch failed (${res.status})`
+      try {
+        const contentType = res.headers.get("content-type") || ""
+        if (contentType.includes("application/json")) {
+          const payload = await res.json() as { error?: unknown; message?: unknown }
+          const message =
+            typeof payload.error === "string" ? payload.error
+              : typeof payload.message === "string" ? payload.message
+              : ""
+          if (message.trim()) return `${message} (status ${res.status})`
+        }
+
+        const text = (await res.text()).trim()
+        if (text) return `${text} (status ${res.status})`
+      } catch {
+        // Fall through to generic message.
+      }
+      return fallback
+    }
 
     const fetchDirect = async (): Promise<Record<string, unknown>> => {
       if (provider === "ollama") {
-        const ollamaRoot = baseUrl.replace(/\/v1\/?$/, "")
-        const res = await fetch(`${ollamaRoot}/api/tags`, { signal: AbortSignal.timeout(5000) })
+        const res = await fetch(`${serverRoot}/api/tags`, { signal: AbortSignal.timeout(5000) })
         if (!res.ok) throw new Error(`Ollama returned ${res.status}`)
         return await res.json()
       }
-      const res = await fetch(`${baseUrl.replace(/\/$/, "")}/models`, { signal: AbortSignal.timeout(5000) })
+      const res = await fetch(`${serverRoot}/v1/models`, { signal: AbortSignal.timeout(5000) })
       if (!res.ok) throw new Error(`LM Studio returned ${res.status}`)
       return await res.json()
     }
@@ -233,7 +256,7 @@ export async function fetchLocalModels(
         } else if (proxyRes.status === 403 || proxyRes.status === 404 || proxyRes.status === 405) {
           data = await fetchDirect()
         } else {
-          return []
+          throw new Error(await readErrorMessage(proxyRes))
         }
       } catch {
         data = await fetchDirect()
@@ -241,7 +264,7 @@ export async function fetchLocalModels(
     } else {
       // Browser web app: always proxy through Next.js to avoid CORS issues.
       const res = await fetchProxy()
-      if (!res.ok) return []
+      if (!res.ok) throw new Error(await readErrorMessage(res))
       data = await res.json()
     }
 
@@ -267,8 +290,8 @@ export async function fetchLocalModels(
       description: "Local model",
       supportsGrounding: false,
     }))
-  } catch {
-    return []
+  } catch (err) {
+    throw (err instanceof Error ? err : new Error("Could not fetch local models"))
   }
 }
 
@@ -383,6 +406,7 @@ export async function requestChatCompletion(
         baseUrl: config.customBaseUrl?.trim() || undefined,
         body: chatBody,
       }),
+      signal: AbortSignal.timeout(120_000),
     })
 
   if (isTauri()) {

@@ -81,6 +81,7 @@ export function ProjectSidebar({
   // Dynamically fetched models for local providers (Ollama / LM Studio)
   const [localModels, setLocalModels] = useState<AIModel[]>([])
   const [localModelsLoading, setLocalModelsLoading] = useState(false)
+  const [localModelsError, setLocalModelsError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -101,15 +102,18 @@ export function ProjectSidebar({
     if (!isLocalProvider(draft.provider)) {
       setLocalModels([])
       setLocalModelsLoading(false)
+      setLocalModelsError(null)
       return
     }
     let cancelled = false
     const doFetch = () => {
       setLocalModelsLoading(true)
+      setLocalModelsError(null)
       fetchLocalModels(draft.provider, draft.customBaseUrl.trim() || undefined)
         .then(models => {
           if (cancelled) return
           setLocalModels(models)
+          setLocalModelsError(null)
           if (models.length > 0) {
             setDraft(d => (
               models.some(m => m.id === d.modelId)
@@ -117,6 +121,10 @@ export function ProjectSidebar({
                 : { ...d, modelId: models[0].id }
             ))
           }
+        })
+        .catch(err => {
+          if (cancelled) return
+          setLocalModelsError(err instanceof Error ? err.message : "Could not fetch local models")
         })
         .finally(() => {
           if (!cancelled) setLocalModelsLoading(false)
@@ -448,9 +456,11 @@ export function ProjectSidebar({
                       <button
                         onClick={() => {
                           setLocalModelsLoading(true)
+                          setLocalModelsError(null)
                           fetchLocalModels(draft.provider, draft.customBaseUrl.trim() || undefined)
                             .then(models => {
                               setLocalModels(models)
+                              setLocalModelsError(null)
                               if (models.length > 0) {
                                 setDraft(d => (
                                   models.some(m => m.id === d.modelId)
@@ -459,8 +469,9 @@ export function ProjectSidebar({
                                 ))
                               }
                             })
-                            .catch(() => {
+                            .catch(err => {
                               // Keep existing models if refresh fails.
+                              setLocalModelsError(err instanceof Error ? err.message : "Could not fetch local models")
                             })
                             .finally(() => {
                               setLocalModelsLoading(false)
@@ -475,6 +486,21 @@ export function ProjectSidebar({
                   {isLocal && localModelsLoading ? (
                     <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2">
                       <span className="font-mono text-[11px] text-muted-foreground">Fetching models…</span>
+                    </div>
+                  ) : isLocal && localModelsError ? (
+                    <div className="flex flex-col gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2">
+                      <span className="font-mono text-[11px] text-amber-300">
+                        {localModelsError}
+                      </span>
+                      <input
+                        type="text"
+                        value={draft.modelId}
+                        onChange={e => setDraft(d => ({ ...d, modelId: e.target.value }))}
+                        placeholder="Type a model name manually"
+                        className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40 border-t border-amber-500/20 pt-1.5 mt-0.5"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
                     </div>
                   ) : isLocal && models.length === 0 ? (
                     <div className="flex flex-col gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2">
