@@ -95,7 +95,8 @@ export function ProjectSidebar({
     if (showSettings) setDraft(aiSettings)
   }, [showSettings])
 
-  // Fetch installed models when a local provider is selected
+  // Fetch installed models when a local provider is selected.
+  // Debounce URL changes (500ms) to avoid per-keystroke fetches.
   useEffect(() => {
     if (!isLocalProvider(draft.provider)) {
       setLocalModels([])
@@ -103,19 +104,22 @@ export function ProjectSidebar({
       return
     }
     let cancelled = false
-    setLocalModelsLoading(true)
-    fetchLocalModels(draft.provider, draft.customBaseUrl || undefined)
-      .then(models => {
-        if (cancelled) return
-        setLocalModels(models)
-        if (models.length > 0 && !models.some(m => m.id === draft.modelId)) {
-          setDraft(d => ({ ...d, modelId: models[0].id }))
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLocalModelsLoading(false)
-      })
-    return () => { cancelled = true }
+    const doFetch = () => {
+      setLocalModelsLoading(true)
+      fetchLocalModels(draft.provider, draft.customBaseUrl || undefined)
+        .then(models => {
+          if (cancelled) return
+          setLocalModels(models)
+          if (models.length > 0 && !models.some(m => m.id === draft.modelId)) {
+            setDraft(d => ({ ...d, modelId: models[0].id }))
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLocalModelsLoading(false)
+        })
+    }
+    const timer = setTimeout(doFetch, 500)
+    return () => { cancelled = true; clearTimeout(timer) }
   }, [draft.provider, draft.customBaseUrl])
 
   // Jump straight to settings when requested externally
@@ -345,11 +349,11 @@ export function ProjectSidebar({
                                 setDraft(d => ({
                                   ...d,
                                   provider: preset.id,
-                                  modelId: newModels[0]?.id ?? d.modelId,
+                                  // Local providers: clear modelId until fetch populates it.
+                                  // Cloud providers: pick the first model in the preset list.
+                                  modelId: isLocal ? "" : (newModels[0]?.id ?? d.modelId),
                                   webGrounding: isLocal ? false : d.webGrounding,
                                   customBaseUrl: "",
-                                  // Local providers don't need an API key; cloud providers
-                                  // restore the saved key or clear for new entry.
                                   apiKey: isLocal ? "" : (d.providerKeys?.[preset.id] ?? ""),
                                 }))
                                 setProviderOpen(false)

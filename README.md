@@ -51,7 +51,7 @@ npm run tauri:build   # build a distributable .dmg / .msi / .AppImage
 
 **Add your API key**: click the menu icon (top-left) → Settings → choose your provider → paste your key. The key is stored in your browser's `localStorage` and goes directly to the AI provider — it never passes through any server.
 
-**Local providers (Ollama / LM Studio)**: select Ollama or LM Studio from the provider dropdown. Make sure the server is running — your installed models will appear in the dropdown automatically. No API key needed.
+**Local providers (Ollama / LM Studio)**: select Ollama or LM Studio from the provider dropdown. Make sure the server is running — your installed models will appear in the dropdown automatically. No API key needed. Local providers work in development (`npm run dev`) and the Tauri desktop app.
 
 **Enable web grounding** (optional): toggle "Web grounding" in Settings to let the AI cite real sources for claims, questions, and references. Supported on OpenRouter `:online` models and OpenAI search-preview models.
 
@@ -92,11 +92,9 @@ GLM models from Zhipu AI. Get a key at [z.ai](https://z.ai/manage-apikey/apikey-
 | `glm-5-turbo` | Fast, community-tested. |
 
 ### Ollama *(local)*
-
 Run models locally with [Ollama](https://ollama.com). Install a model (`ollama pull llama3.1`) and it appears in the dropdown automatically. No API key needed.
 
 ### LM Studio *(local)*
-
 Run models locally with [LM Studio](https://lmstudio.ai). Load a model in LM Studio, start the local server, and it appears in the dropdown automatically. No API key needed.
 
 ---

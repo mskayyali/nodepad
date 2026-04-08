@@ -52,9 +52,9 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cloud.umami.is",
               "style-src 'self' 'unsafe-inline'",
-              // In dev, allow direct localhost connections for local AI providers.
-              // In production, local provider traffic goes through /api/* proxy routes
-              // (covered by 'self'), so localhost isn't needed in CSP.
+              // Local AI providers (Ollama/LM Studio) only work in dev mode
+              // (via /api/* proxy routes) or the Tauri desktop app (direct fetch).
+              // In dev, also allow direct localhost connections as a fallback.
               `connect-src 'self' https://openrouter.ai https://api.openai.com https://api.z.ai${isDev ? " http://localhost:11434 http://localhost:1234 http://127.0.0.1:11434 http://127.0.0.1:1234" : ""} https://cloud.umami.is https://api-gateway.umami.dev`,
               "img-src 'self' data: blob: https://i.ytimg.com",
               "font-src 'self' data:",
