@@ -147,7 +147,7 @@ export function ProjectSidebar({
   // Sync draft when panel opens
   useEffect(() => {
     if (showSettings) setDraft(aiSettings)
-  }, [showSettings])
+  }, [showSettings, aiSettings])
 
   // Fetch installed models when a local provider is selected.
   // Debounce URL changes (500ms) to avoid per-keystroke fetches.
