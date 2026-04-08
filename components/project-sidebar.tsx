@@ -443,13 +443,19 @@ export function ProjectSidebar({
                       <button
                         onClick={() => {
                           setLocalModelsLoading(true)
-                          fetchLocalModels(draft.provider, draft.customBaseUrl || undefined).then(models => {
-                            setLocalModels(models)
-                            if (models.length > 0 && !models.some(m => m.id === draft.modelId)) {
-                              setDraft(d => ({ ...d, modelId: models[0].id }))
-                            }
-                            setLocalModelsLoading(false)
-                          })
+                          fetchLocalModels(draft.provider, draft.customBaseUrl || undefined)
+                            .then(models => {
+                              setLocalModels(models)
+                              if (models.length > 0 && !models.some(m => m.id === draft.modelId)) {
+                                setDraft(d => ({ ...d, modelId: models[0].id }))
+                              }
+                            })
+                            .catch(() => {
+                              // Keep existing models if refresh fails.
+                            })
+                            .finally(() => {
+                              setLocalModelsLoading(false)
+                            })
                         }}
                         className="font-mono text-[9px] text-primary hover:text-primary/80 transition-colors"
                       >
