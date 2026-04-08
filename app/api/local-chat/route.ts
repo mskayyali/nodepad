@@ -5,20 +5,15 @@ import { NextRequest, NextResponse } from "next/server"
  * Needed because these servers typically don't set CORS headers, so the
  * browser blocks direct fetch requests from the app.
  *
- * Security: only allows requests when the app is running on localhost,
- * and only proxies to localhost targets. Disabled in production to prevent SSRF.
+ * Security:
+ * - Disabled entirely in production (NODE_ENV check)
+ * - Only proxies to localhost targets on ports 11434/1234
  *
  * POST { targetUrl: string, body: object }
  */
 
 const ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"])
 const ALLOWED_PORTS = new Set(["11434", "1234"])
-
-function isLocalHost(host: string): boolean {
-  // Strip port if present
-  const hostname = host.replace(/:\d+$/, "")
-  return ALLOWED_HOSTS.has(hostname)
-}
 
 function isAllowedTarget(raw: string): boolean {
   try {
@@ -33,11 +28,9 @@ function isAllowedTarget(raw: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  // Only allow when the app itself is running on localhost
-  const requestHost = req.headers.get("host") || ""
-  if (!isLocalHost(requestHost)) {
+  if (process.env.NODE_ENV === "production") {
     return NextResponse.json(
-      { error: "Local proxy is only available when running on localhost" },
+      { error: "Local proxy is only available in development" },
       { status: 403 },
     )
   }

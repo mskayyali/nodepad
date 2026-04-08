@@ -99,19 +99,22 @@ export function ProjectSidebar({
   useEffect(() => {
     if (!isLocalProvider(draft.provider)) {
       setLocalModels([])
+      setLocalModelsLoading(false)
       return
     }
     let cancelled = false
     setLocalModelsLoading(true)
-    fetchLocalModels(draft.provider, draft.customBaseUrl || undefined).then(models => {
-      if (cancelled) return
-      setLocalModels(models)
-      // Auto-select first model if none is set or current selection isn't in the list
-      if (models.length > 0 && !models.some(m => m.id === draft.modelId)) {
-        setDraft(d => ({ ...d, modelId: models[0].id }))
-      }
-      setLocalModelsLoading(false)
-    })
+    fetchLocalModels(draft.provider, draft.customBaseUrl || undefined)
+      .then(models => {
+        if (cancelled) return
+        setLocalModels(models)
+        if (models.length > 0 && !models.some(m => m.id === draft.modelId)) {
+          setDraft(d => ({ ...d, modelId: models[0].id }))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLocalModelsLoading(false)
+      })
     return () => { cancelled = true }
   }, [draft.provider, draft.customBaseUrl])
 
@@ -139,7 +142,9 @@ export function ProjectSidebar({
       ...(draft.providerKeys ?? {}),
       [draft.provider]: draft.apiKey,
     }
-    onUpdateAISettings({ ...draft, providerKeys })
+    // Trim customBaseUrl so whitespace-only values fall back to preset
+    const trimmedDraft = { ...draft, customBaseUrl: draft.customBaseUrl?.trim() ?? "" }
+    onUpdateAISettings({ ...trimmedDraft, providerKeys })
     setShowSettings(false)
   }
 
