@@ -1,0 +1,41 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "nodepad",
+  "version": "0.1.0",
+  "identifier": "space.nodepad.app",
+  "build": {
+    "frontendDist": "../out",
+    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build:tauri"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "nodepad",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://openrouter.ai https://api.openai.com https://api.z.ai http://localhost:* http://127.0.0.1:* http://[::1]:*; img-src 'self' data: blob: https://i.ytimg.com asset: https://asset.localhost; font-src 'self' data:",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:3000 ws://127.0.0.1:3000 ws://[::1]:3000 wss://localhost:3000 wss://127.0.0.1:3000 wss://[::1]:3000 http://localhost:3000 http://127.0.0.1:3000 http://[::1]:3000 https://openrouter.ai https://api.openai.com https://api.z.ai http://localhost:* http://127.0.0.1:* http://[::1]:*; img-src 'self' data: blob: https://i.ytimg.com asset: https://asset.localhost; font-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

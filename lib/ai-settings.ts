@@ -12,7 +12,8 @@ export interface AIModel {
   groundingModelId?: string
 }
 
-export type AIProvider = "openrouter" | "openai" | "zai"
+export type AIProvider = "openrouter" | "openai" | "zai" | "ollama" | "lmstudio"
+export type LocalProvider = "ollama" | "lmstudio"
 
 export interface AIProviderPreset {
   id: AIProvider
@@ -43,6 +44,20 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     baseUrl: "https://api.z.ai/api/paas/v4",
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     keyPlaceholder: "Your Z.ai API key",
+  },
+  {
+    id: "ollama",
+    label: "Ollama",
+    baseUrl: "http://localhost:11434/v1",
+    keyUrl: "",
+    keyPlaceholder: "No key needed (leave as-is)",
+  },
+  {
+    id: "lmstudio",
+    label: "LM Studio",
+    baseUrl: "http://localhost:1234/v1",
+    keyUrl: "",
+    keyPlaceholder: "No key needed (leave as-is)",
   },
 ]
 
@@ -159,10 +174,139 @@ export const ZAI_MODELS: AIModel[] = [
   },
 ]
 
+/** True when running inside a Tauri desktop shell (no Next.js server available) */
+export function isTauri(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
+}
+
+function hasLoopbackHttpOrigin(): boolean {
+  if (typeof window === "undefined") return false
+  const protocol = window.location?.protocol || ""
+  const hostname = (window.location?.hostname || "").replace(/^\[(.*)\]$/, "$1")
+  const isHttp = protocol === "http:" || protocol === "https:"
+  const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
+  return isHttp && isLoopback
+}
+
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
-  if (provider === "openai") return OPENAI_MODELS
-  if (provider === "zai")    return ZAI_MODELS
+  if (provider === "openai")   return OPENAI_MODELS
+  if (provider === "zai")      return ZAI_MODELS
+  // Local providers return [] — models are fetched dynamically via fetchLocalModels()
+  if (provider === "ollama" || provider === "lmstudio") return []
   return AI_MODELS // openrouter + safe fallback for any stale localStorage value
+}
+
+/**
+ * Fetch installed models from a local provider (Ollama or LM Studio).
+ * In the browser, routes through /api/local-models to bypass CORS.
+ * In Tauri, prefers /api/local-models when available (dev mode with Next)
+ * and falls back to direct local calls for static desktop builds.
+ */
+export async function fetchLocalModels(
+  provider: AIProvider,
+  customBaseUrl?: string,
+): Promise<AIModel[]> {
+  try {
+    if (provider !== "ollama" && provider !== "lmstudio") return []
+
+    let data: Record<string, unknown>
+    const trimmedBaseUrl = customBaseUrl?.trim()
+    const preset = getPreset(provider)
+    const baseUrl = trimmedBaseUrl || preset.baseUrl
+    const serverRoot = baseUrl.replace(/\/v1\/?$/, "").replace(/\/$/, "")
+
+    const readErrorMessage = async (res: Response): Promise<string> => {
+      const fallback = `Local model fetch failed (${res.status})`
+      try {
+        const bodyText = await res.clone().text()
+        const contentType = res.headers.get("content-type") || ""
+        if (contentType.includes("application/json")) {
+          const payload = JSON.parse(bodyText) as { error?: unknown; message?: unknown }
+          const message =
+            typeof payload.error === "string" ? payload.error
+              : typeof payload.message === "string" ? payload.message
+              : ""
+          if (message.trim()) return `${message} (status ${res.status})`
+        }
+
+        const text = bodyText.trim()
+        if (text) return `${text} (status ${res.status})`
+      } catch {
+        // Fall through to generic message.
+      }
+      return fallback
+    }
+
+    const fetchDirect = async (): Promise<Record<string, unknown>> => {
+      if (provider === "ollama") {
+        const res = await fetch(`${serverRoot}/api/tags`, { signal: AbortSignal.timeout(5000) })
+        if (!res.ok) throw new Error(`Ollama returned ${res.status}`)
+        return await res.json()
+      }
+      const res = await fetch(`${serverRoot}/v1/models`, { signal: AbortSignal.timeout(5000) })
+      if (!res.ok) throw new Error(`LM Studio returned ${res.status}`)
+      return await res.json()
+    }
+
+    const fetchProxy = async () =>
+      fetch("/api/local-models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, baseUrl: trimmedBaseUrl }),
+        signal: AbortSignal.timeout(6000),
+      })
+
+    if (isTauri()) {
+      // Tauri dev (loopback http origin) has Next.js API routes.
+      // Tauri static desktop builds do not, so skip proxy there.
+      if (!hasLoopbackHttpOrigin()) {
+        data = await fetchDirect()
+      } else {
+        try {
+          const proxyRes = await fetchProxy()
+          if (proxyRes.ok) {
+            data = await proxyRes.json()
+          } else if (proxyRes.status === 403 || proxyRes.status === 404 || proxyRes.status === 405) {
+            data = await fetchDirect()
+          } else {
+            throw new Error(await readErrorMessage(proxyRes))
+          }
+        } catch {
+          data = await fetchDirect()
+        }
+      }
+    } else {
+      // Browser web app: always proxy through Next.js to avoid CORS issues.
+      const res = await fetchProxy()
+      if (!res.ok) throw new Error(await readErrorMessage(res))
+      data = await res.json()
+    }
+
+    if (provider === "ollama") {
+      const models = ((data as { models?: unknown[] }).models ?? []) as Array<{ name: string; details?: { parameter_size?: string; family?: string } }>
+      return models.map(m => ({
+        id: m.name,
+        label: m.name,
+        shortLabel: m.name.split(":")[0],
+        description: m.details?.parameter_size
+          ? `${m.details.parameter_size}${m.details.family ? ` · ${m.details.family}` : ""}`
+          : "Local model",
+        supportsGrounding: false,
+      }))
+    }
+
+    // LM Studio (OpenAI-compatible format)
+    const models = ((data as { data?: unknown[] }).data ?? []) as Array<{ id: string }>
+    return models.map(m => ({
+      id: m.id,
+      label: m.id,
+      shortLabel: m.id.split("/").pop() || m.id,
+      description: "Local model",
+      supportsGrounding: false,
+    }))
+  } catch (err) {
+    throw (err instanceof Error ? err : new Error("Could not fetch local models"))
+  }
 }
 
 export const DEFAULT_MODEL_ID = "openai/gpt-4o"
@@ -201,17 +345,45 @@ export interface AIConfig {
   customBaseUrl: string
 }
 
+const LOCAL_PROVIDERS = new Set<AIProvider>(["ollama", "lmstudio"])
+
+export function isLocalProvider(provider: AIProvider): provider is LocalProvider {
+  return LOCAL_PROVIDERS.has(provider)
+}
+
+function normalizeBaseUrl(url: string): string {
+  return url.trim().replace(/\/+$/, "")
+}
+
+function ensureLocalV1BaseUrl(baseUrl: string): string {
+  const normalized = normalizeBaseUrl(baseUrl)
+  try {
+    const url = new URL(normalized)
+    const pathname = url.pathname.replace(/\/+$/, "")
+    if (pathname === "" || pathname === "/") {
+      url.pathname = "/v1"
+    } else if (!pathname.endsWith("/v1")) {
+      url.pathname = `${pathname}/v1`
+    }
+    return normalizeBaseUrl(url.toString())
+  } catch {
+    return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`
+  }
+}
+
 export function loadAIConfig(): AIConfig | null {
   const s = loadSettings()
-  if (!s.apiKey) return null
+  // Local providers don't need an API key
+  if (!s.apiKey && !isLocalProvider(s.provider)) return null
+  const rawModelId = s.modelId?.trim() || ""
+  if (isLocalProvider(s.provider) && !rawModelId) {
+    // Local providers require an explicit selected model.
+    return null
+  }
   const models = getModelsForProvider(s.provider)
-  const model = models.find(m => m.id === s.modelId)
-  // Use the matched model's id if found; otherwise fall back to the first model
-  // for this provider.  This handles the case where localStorage still holds an
-  // OpenRouter-prefixed id (e.g. "openai/gpt-4o") after switching to OpenAI —
-  // that string won't match any entry in OPENAI_MODELS so we fall back to "gpt-4o".
-  const modelId = model?.id ?? models[0]?.id ?? s.modelId ?? DEFAULT_MODEL_ID
-  // Z.ai does not support grounding; only openrouter and openai do
+  const model = models.find(m => m.id === rawModelId)
+  const candidateModelId = model?.id ?? models[0]?.id ?? rawModelId
+  const modelId = candidateModelId || DEFAULT_MODEL_ID
   const supportsGrounding =
     (s.provider === "openrouter" || s.provider === "openai") &&
     s.webGrounding &&
@@ -220,19 +392,106 @@ export function loadAIConfig(): AIConfig | null {
 }
 
 export function getBaseUrl(config: AIConfig): string {
-  return getPreset(config.provider).baseUrl
+  // Prefer user-supplied custom URL.
+  // Note: production web proxy mode may enforce provider-default ports server-side.
+  const custom = normalizeBaseUrl(config.customBaseUrl || "")
+  if (custom) return custom
+  return normalizeBaseUrl(getPreset(config.provider).baseUrl)
 }
 
 export function getProviderHeaders(config: AIConfig): Record<string, string> {
   const base: Record<string, string> = {
     "Content-Type": "application/json",
-    "Authorization": `Bearer ${config.apiKey}`,
+  }
+  // Local providers don't need auth; Ollama ignores it, LM Studio accepts a dummy key
+  if (!isLocalProvider(config.provider)) {
+    base["Authorization"] = `Bearer ${config.apiKey}`
   }
   if (config.provider === "openrouter") {
     base["HTTP-Referer"] = "https://nodepad.space"
     base["X-Title"] = "nodepad"
   }
   return base
+}
+
+/**
+ * Route chat-completions to the correct transport for each runtime.
+ * - Cloud providers: direct call to provider base URL.
+ * - Local providers in browser: /api/local-chat proxy (CORS-safe).
+ * - Local providers in Tauri: prefer proxy in dev, fallback to direct local call.
+ */
+export async function requestChatCompletion(
+  config: AIConfig,
+  chatBody: Record<string, unknown>,
+): Promise<Response> {
+  const baseUrl = getBaseUrl(config)
+  const isLocal = isLocalProvider(config.provider)
+  const directBaseUrl = isLocal ? ensureLocalV1BaseUrl(baseUrl) : baseUrl
+
+  const requestDirect = () =>
+    fetch(`${directBaseUrl}/chat/completions`, {
+      method: "POST",
+      headers: getProviderHeaders(config),
+      body: JSON.stringify(chatBody),
+      signal: isLocal ? AbortSignal.timeout(120_000) : undefined,
+    })
+
+  if (!isLocal) {
+    return requestDirect()
+  }
+
+  const shouldFallbackToDirect = async (res: Response): Promise<boolean> => {
+    if (res.status === 404 || res.status === 405) return true
+    if (res.status !== 403) return false
+
+    const contentType = res.headers.get("content-type") || ""
+    if (!contentType.includes("application/json")) return false
+
+    try {
+      const payload = await res.clone().json() as { error?: unknown }
+      const error = typeof payload.error === "string" ? payload.error : ""
+      return (
+        error.includes("Cross-site requests are not allowed") ||
+        error.includes("Local proxy is disabled in production") ||
+        error.includes("Only localhost")
+      )
+    } catch {
+      return false
+    }
+  }
+
+  const requestViaProxy = () =>
+    fetch("/api/local-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider: config.provider,
+        baseUrl: config.customBaseUrl?.trim() || undefined,
+        body: chatBody,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    })
+
+  if (isTauri()) {
+    if (!hasLoopbackHttpOrigin()) {
+      return requestDirect()
+    }
+
+    // Tauri dev can use the Next.js proxy route; static desktop builds cannot.
+    // Fall back only when the proxy route itself is unavailable or blocked
+    // by route-level guardrails; otherwise return proxy error as-is.
+    try {
+      const proxyRes = await requestViaProxy()
+      if (await shouldFallbackToDirect(proxyRes)) {
+        return requestDirect()
+      }
+      return proxyRes
+    } catch {
+      return requestDirect()
+    }
+  }
+
+  return requestViaProxy()
 }
 
 /** @deprecated Use loadAIConfig() for direct browser → provider calls.

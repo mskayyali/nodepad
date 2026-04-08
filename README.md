@@ -26,7 +26,7 @@ Three views: **tiling** (spatial BSP grid), **kanban** (grouped by type), **grap
 
 ## Setup
 
-**Requirements**: a desktop browser and an API key from one of the supported providers.
+### Browser
 
 ```bash
 git clone https://github.com/mskayyali/nodepad.git
@@ -37,9 +37,65 @@ npm run dev
 
 Open [localhost:3000](http://localhost:3000).
 
+### Desktop app (Tauri)
+
+Requires [Rust](https://rustup.rs/) installed on your system.
+
+```bash
+npm install
+npm run tauri:dev     # dev mode with hot reload
+npm run tauri:build   # build a distributable .dmg / .msi / .AppImage
+```
+
+### Configuration
+
 **Add your API key**: click the menu icon (top-left) → Settings → choose your provider → paste your key. The key is stored in your browser's `localStorage` and goes directly to the AI provider — it never passes through any server.
 
-**Enable web grounding** (optional): toggle "Web grounding" in Settings to let the AI cite real sources for claims, questions, and references. Supported on OpenRouter `:online` models and OpenAI search-preview models.
+**Local providers (Ollama / LM Studio)**: select Ollama or LM Studio from the provider dropdown. Make sure the server is running — your installed models will appear in the dropdown automatically. No API key needed.
+
+By default, local providers work out of the box in `npm run dev` and in the Tauri desktop app.
+
+End users never need to set environment variables; they only use the app UI.
+
+How "local" works:
+
+- Tauri desktop app: local = the same computer running the app.
+- Browser + `npm run dev`: local = the same computer running the Next.js dev server.
+- Hosted production web: local = the server machine (not each visitor's laptop).
+
+Self-hosted production web setup (host/admin only):
+
+- Where to run this: in the project root on the machine running `npm run start`.
+- One-time persistent setup (recommended):
+
+```bash
+echo "NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD=1" >> .env.production.local
+```
+
+- Restart your production app process after setting the variable.
+
+- One-off startup (current shell only):
+
+```bash
+NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD=1 npm run start
+```
+
+- PowerShell one-off:
+
+```powershell
+$env:NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD="1"; npm run start
+```
+
+This enables `/api/local-*` proxy routes in production. They are loopback-only (`localhost` / `127.0.0.1` / `::1`).
+
+- In production proxy mode, ports are restricted to provider defaults (`11434` for Ollama, `1234` for LM Studio).
+- In development (`npm run dev`), custom loopback ports are allowed.
+
+**Enable web grounding** (optional): toggle "Web grounding" in Settings to let the AI cite real sources for claims, questions, and references.
+
+- Works in browser and Tauri desktop.
+- Available only for OpenRouter `:online` models and OpenAI search-preview models.
+- Not available for Ollama / LM Studio local providers.
 
 ---
 
@@ -77,6 +133,12 @@ GLM models from Zhipu AI. Get a key at [z.ai](https://z.ai/manage-apikey/apikey-
 | `glm-5` | Z.ai flagship model. |
 | `glm-5-turbo` | Fast, community-tested. |
 
+### Ollama *(local)*
+Run models locally with [Ollama](https://ollama.com). Install a model (`ollama pull llama3.1`) and it appears in the dropdown automatically. No API key needed.
+
+### LM Studio *(local)*
+Run models locally with [LM Studio](https://lmstudio.ai). Load a model in LM Studio, start the local server, and it appears in the dropdown automatically. No API key needed.
+
 ---
 
 ## Keyboard shortcuts
@@ -105,7 +167,7 @@ Everything lives in your browser. No account, no server, no database.
 
 ## Tech
 
-Next.js · React 19 · TypeScript · Tailwind CSS v4 · D3.js · Framer Motion
+Next.js · React 19 · TypeScript · Tailwind CSS v4 · D3.js · Framer Motion · Tauri
 
 ---
 

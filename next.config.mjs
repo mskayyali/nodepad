@@ -1,5 +1,10 @@
+const isTauri = process.env.TAURI_ENV === "1"
+const isDev = process.env.NODE_ENV === "development"
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Static export for Tauri desktop builds (no Node.js server)
+  ...(isTauri ? { output: "export" } : {}),
   typescript: {
     // Build errors are intentionally ignored — see CLAUDE.md
     ignoreBuildErrors: true,
@@ -47,7 +52,10 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cloud.umami.is",
               "style-src 'self' 'unsafe-inline'",
-              "connect-src 'self' https://openrouter.ai https://api.openai.com https://api.z.ai https://cloud.umami.is https://api-gateway.umami.dev",
+              // Local AI providers (Ollama/LM Studio) use same-origin /api proxies
+              // in web mode (dev + self-hosted prod when enabled server-side).
+              // In dev, also allow direct localhost connections as a fallback.
+              `connect-src 'self' https://openrouter.ai https://api.openai.com https://api.z.ai${isDev ? " http://localhost:11434 http://localhost:1234 http://127.0.0.1:11434 http://127.0.0.1:1234 http://[::1]:11434 http://[::1]:1234" : ""} https://cloud.umami.is https://api-gateway.umami.dev`,
               "img-src 'self' data: blob: https://i.ytimg.com",
               "font-src 'self' data:",
               "frame-src https://www.youtube-nocookie.com https://www.youtube.com",

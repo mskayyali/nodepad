@@ -1,6 +1,6 @@
 "use client"
 
-import { loadAIConfig, getBaseUrl, getProviderHeaders } from "@/lib/ai-settings"
+import { loadAIConfig, isLocalProvider, requestChatCompletion } from "@/lib/ai-settings"
 
 export interface GhostContext {
   text: string
@@ -18,7 +18,9 @@ export async function generateGhostClient(
   previousSyntheses: string[] = [],
 ): Promise<GhostResult> {
   const config = loadAIConfig()
-  if (!config) throw new Error("No API key configured")
+  if (!config) {
+    throw new Error("AI settings are incomplete. Set an API key for cloud providers, or select a local model for Ollama/LM Studio.")
+  }
 
   // Ghost falls back to a lighter model if none is set
   const model = config.modelId || "google/gemini-2.0-flash-lite-001"
@@ -50,17 +52,15 @@ ${context.map(c =>
 Return ONLY valid JSON:
 {"text": "...", "category": "..."}`
 
-  const baseUrl = getBaseUrl(config)
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: getProviderHeaders(config),
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-    }),
-  })
+  const isLocal = isLocalProvider(config.provider)
+  const chatBody = {
+    model,
+    messages: [{ role: "user", content: prompt }],
+    ...(isLocal ? {} : { response_format: { type: "json_object" } }),
+    temperature: 0.7,
+  }
+
+  const response = await requestChatCompletion(config, chatBody)
 
   if (!response.ok) {
     const err = await response.text()
