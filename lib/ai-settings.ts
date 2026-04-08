@@ -209,9 +209,10 @@ export async function fetchLocalModels(
     const readErrorMessage = async (res: Response): Promise<string> => {
       const fallback = `Local model fetch failed (${res.status})`
       try {
+        const bodyText = await res.clone().text()
         const contentType = res.headers.get("content-type") || ""
         if (contentType.includes("application/json")) {
-          const payload = await res.json() as { error?: unknown; message?: unknown }
+          const payload = JSON.parse(bodyText) as { error?: unknown; message?: unknown }
           const message =
             typeof payload.error === "string" ? payload.error
               : typeof payload.message === "string" ? payload.message
@@ -219,7 +220,7 @@ export async function fetchLocalModels(
           if (message.trim()) return `${message} (status ${res.status})`
         }
 
-        const text = (await res.text()).trim()
+        const text = bodyText.trim()
         if (text) return `${text} (status ${res.status})`
       } catch {
         // Fall through to generic message.

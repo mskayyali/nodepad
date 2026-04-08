@@ -82,7 +82,60 @@ export function ProjectSidebar({
   const [localModels, setLocalModels] = useState<AIModel[]>([])
   const [localModelsLoading, setLocalModelsLoading] = useState(false)
   const [localModelsError, setLocalModelsError] = useState<string | null>(null)
+  const localModelsRequestIdRef = useRef(0)
+  const localModelsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const clearLocalModelsTimer = () => {
+    if (localModelsTimerRef.current) {
+      clearTimeout(localModelsTimerRef.current)
+      localModelsTimerRef.current = null
+    }
+  }
+
+  const fetchLocalModelsLatest = (
+    provider: AIProvider,
+    customBaseUrl: string,
+    debounceMs = 0,
+  ) => {
+    const requestId = ++localModelsRequestIdRef.current
+
+    const run = () => {
+      if (requestId !== localModelsRequestIdRef.current) return
+      setLocalModelsLoading(true)
+      setLocalModelsError(null)
+      fetchLocalModels(provider, customBaseUrl.trim() || undefined)
+        .then(models => {
+          if (requestId !== localModelsRequestIdRef.current) return
+          setLocalModels(models)
+          setLocalModelsError(null)
+          if (models.length > 0) {
+            setDraft(d => (
+              models.some(m => m.id === d.modelId)
+                ? d
+                : { ...d, modelId: models[0].id }
+            ))
+          }
+        })
+        .catch(err => {
+          if (requestId !== localModelsRequestIdRef.current) return
+          // Keep existing models if refresh fails.
+          setLocalModelsError(err instanceof Error ? err.message : "Could not fetch local models")
+        })
+        .finally(() => {
+          if (requestId === localModelsRequestIdRef.current) {
+            setLocalModelsLoading(false)
+          }
+        })
+    }
+
+    clearLocalModelsTimer()
+    if (debounceMs > 0) {
+      localModelsTimerRef.current = setTimeout(run, debounceMs)
+      return
+    }
+    run()
+  }
 
   useEffect(() => {
     if (editingId && inputRef.current) {
@@ -100,39 +153,25 @@ export function ProjectSidebar({
   // Debounce URL changes (500ms) to avoid per-keystroke fetches.
   useEffect(() => {
     if (!isLocalProvider(draft.provider)) {
+      localModelsRequestIdRef.current += 1
+      clearLocalModelsTimer()
       setLocalModels([])
       setLocalModelsLoading(false)
       setLocalModelsError(null)
       return
     }
-    let cancelled = false
-    const doFetch = () => {
-      setLocalModelsLoading(true)
-      setLocalModelsError(null)
-      fetchLocalModels(draft.provider, draft.customBaseUrl.trim() || undefined)
-        .then(models => {
-          if (cancelled) return
-          setLocalModels(models)
-          setLocalModelsError(null)
-          if (models.length > 0) {
-            setDraft(d => (
-              models.some(m => m.id === d.modelId)
-                ? d
-                : { ...d, modelId: models[0].id }
-            ))
-          }
-        })
-        .catch(err => {
-          if (cancelled) return
-          setLocalModelsError(err instanceof Error ? err.message : "Could not fetch local models")
-        })
-        .finally(() => {
-          if (!cancelled) setLocalModelsLoading(false)
-        })
+    fetchLocalModelsLatest(draft.provider, draft.customBaseUrl, 500)
+    return () => {
+      clearLocalModelsTimer()
     }
-    const timer = setTimeout(doFetch, 500)
-    return () => { cancelled = true; clearTimeout(timer) }
   }, [draft.provider, draft.customBaseUrl])
+
+  useEffect(() => {
+    return () => {
+      localModelsRequestIdRef.current += 1
+      clearLocalModelsTimer()
+    }
+  }, [])
 
   // Jump straight to settings when requested externally
   useEffect(() => {
@@ -455,27 +494,7 @@ export function ProjectSidebar({
                     {isLocal && (
                       <button
                         onClick={() => {
-                          setLocalModelsLoading(true)
-                          setLocalModelsError(null)
-                          fetchLocalModels(draft.provider, draft.customBaseUrl.trim() || undefined)
-                            .then(models => {
-                              setLocalModels(models)
-                              setLocalModelsError(null)
-                              if (models.length > 0) {
-                                setDraft(d => (
-                                  models.some(m => m.id === d.modelId)
-                                    ? d
-                                    : { ...d, modelId: models[0].id }
-                                ))
-                              }
-                            })
-                            .catch(err => {
-                              // Keep existing models if refresh fails.
-                              setLocalModelsError(err instanceof Error ? err.message : "Could not fetch local models")
-                            })
-                            .finally(() => {
-                              setLocalModelsLoading(false)
-                            })
+                          fetchLocalModelsLatest(draft.provider, draft.customBaseUrl)
                         }}
                         className="font-mono text-[9px] text-primary hover:text-primary/80 transition-colors"
                       >
