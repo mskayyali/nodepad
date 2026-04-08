@@ -57,6 +57,8 @@ function normalizeAndValidateBaseUrl(provider: LocalProvider, baseUrl?: string):
     const port = Number(url.port)
     if (!Number.isInteger(port) || port < 1 || port > 65535) return null
     if (IS_PRODUCTION && url.port !== ALLOWED_PORTS[provider]) return null
+    const normalizedPath = url.pathname.replace(/\/+$/, "") || "/"
+    if (normalizedPath !== "/" && normalizedPath !== "/v1") return null
     if (url.search || url.hash) return null
     return url
   } catch {

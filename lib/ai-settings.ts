@@ -341,6 +341,22 @@ function normalizeBaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, "")
 }
 
+function ensureLocalV1BaseUrl(baseUrl: string): string {
+  const normalized = normalizeBaseUrl(baseUrl)
+  try {
+    const url = new URL(normalized)
+    const pathname = url.pathname.replace(/\/+$/, "")
+    if (pathname === "" || pathname === "/") {
+      url.pathname = "/v1"
+    } else if (!pathname.endsWith("/v1")) {
+      url.pathname = `${pathname}/v1`
+    }
+    return normalizeBaseUrl(url.toString())
+  } catch {
+    return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`
+  }
+}
+
 export function loadAIConfig(): AIConfig | null {
   const s = loadSettings()
   // Local providers don't need an API key
@@ -395,17 +411,39 @@ export async function requestChatCompletion(
   chatBody: Record<string, unknown>,
 ): Promise<Response> {
   const baseUrl = getBaseUrl(config)
+  const isLocal = isLocalProvider(config.provider)
+  const directBaseUrl = isLocal ? ensureLocalV1BaseUrl(baseUrl) : baseUrl
 
   const requestDirect = () =>
-    fetch(`${baseUrl}/chat/completions`, {
+    fetch(`${directBaseUrl}/chat/completions`, {
       method: "POST",
       headers: getProviderHeaders(config),
       body: JSON.stringify(chatBody),
-      signal: isLocalProvider(config.provider) ? AbortSignal.timeout(120_000) : undefined,
+      signal: isLocal ? AbortSignal.timeout(120_000) : undefined,
     })
 
-  if (!isLocalProvider(config.provider)) {
+  if (!isLocal) {
     return requestDirect()
+  }
+
+  const shouldFallbackToDirect = async (res: Response): Promise<boolean> => {
+    if (res.status === 404 || res.status === 405) return true
+    if (res.status !== 403) return false
+
+    const contentType = res.headers.get("content-type") || ""
+    if (!contentType.includes("application/json")) return false
+
+    try {
+      const payload = await res.clone().json() as { error?: unknown }
+      const error = typeof payload.error === "string" ? payload.error : ""
+      return (
+        error.includes("Cross-site requests are not allowed") ||
+        error.includes("Local proxy is disabled in production") ||
+        error.includes("Only localhost")
+      )
+    } catch {
+      return false
+    }
   }
 
   const requestViaProxy = () =>
@@ -422,10 +460,11 @@ export async function requestChatCompletion(
 
   if (isTauri()) {
     // Tauri dev can use the Next.js proxy route; static desktop builds cannot.
-    // Fall back to direct local calls when proxy is unavailable or rejects.
+    // Fall back only when the proxy route itself is unavailable or blocked
+    // by route-level guardrails; otherwise return proxy error as-is.
     try {
       const proxyRes = await requestViaProxy()
-      if (!proxyRes.ok) {
+      if (await shouldFallbackToDirect(proxyRes)) {
         return requestDirect()
       }
       return proxyRes
