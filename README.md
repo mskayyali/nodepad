@@ -51,9 +51,36 @@ npm run tauri:build   # build a distributable .dmg / .msi / .AppImage
 
 **Add your API key**: click the menu icon (top-left) → Settings → choose your provider → paste your key. The key is stored in your browser's `localStorage` and goes directly to the AI provider — it never passes through any server.
 
-**Local providers (Ollama / LM Studio)**: select Ollama or LM Studio from the provider dropdown. Make sure the server is running — your installed models will appear in the dropdown automatically. No API key needed. Local providers work in development (`npm run dev`) and the Tauri desktop app.
+**Local providers (Ollama / LM Studio)**: select Ollama or LM Studio from the provider dropdown. Make sure the server is running — your installed models will appear in the dropdown automatically. No API key needed.
 
-For self-hosted production web deployments, set `NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD=1` on the Next.js server to enable `/api/local-*` proxy routes. These routes are loopback-only (`localhost` / `127.0.0.1` / `::1`), so they can only reach local model servers running on the same host as your Node.js process.
+How "local" works:
+
+- Tauri desktop app: local = the same computer running the app.
+- Browser + `npm run dev`: local = the same computer running the Next.js dev server.
+- Hosted production web: local = the server machine (not each visitor's laptop).
+
+Self-hosted production web setup (host/admin only):
+
+- Where to run this: in the project root on the machine running `npm run start`.
+- One-time persistent setup (recommended):
+
+```bash
+echo "NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD=1" >> .env.production.local
+```
+
+- One-off startup (current shell only):
+
+```bash
+NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD=1 npm run start
+```
+
+- PowerShell one-off:
+
+```powershell
+$env:NODEPAD_ENABLE_LOCAL_PROXY_IN_PROD="1"; npm run start
+```
+
+This enables `/api/local-*` proxy routes in production. They are loopback-only (`localhost` / `127.0.0.1` / `::1`).
 
 **Enable web grounding** (optional): toggle "Web grounding" in Settings to let the AI cite real sources for claims, questions, and references. Supported on OpenRouter `:online` models and OpenAI search-preview models.
 
