@@ -42,7 +42,7 @@ export function TilingMinimap({ pages, activePageIdx, onPageClick }: TilingMinim
                   </p>
                   <div className="flex flex-col gap-1.5">
                     {page.map(block => {
-                      const config = CONTENT_TYPE_CONFIG[block.contentType]
+                      const config = CONTENT_TYPE_CONFIG[block.contentType] ?? CONTENT_TYPE_CONFIG.general
                       const title  = block.text.length > 48
                         ? block.text.slice(0, 48) + "…"
                         : block.text
@@ -77,7 +77,7 @@ export function TilingMinimap({ pages, activePageIdx, onPageClick }: TilingMinim
               {/* Dot grid — up to 3 columns, rows as needed */}
               <div className="grid grid-cols-3 gap-[3px]">
                 {page.map(block => {
-                  const config = CONTENT_TYPE_CONFIG[block.contentType]
+                  const config = CONTENT_TYPE_CONFIG[block.contentType] ?? CONTENT_TYPE_CONFIG.general
                   return (
                     <div
                       key={block.id}

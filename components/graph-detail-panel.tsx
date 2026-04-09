@@ -142,9 +142,9 @@ export function GraphDetailPanel({
     )
   }
 
-  const config = CONTENT_TYPE_CONFIG[block.contentType]
-  const Icon   = config.icon
-  const accent = config.accentVar
+  const config = CONTENT_TYPE_CONFIG[block.contentType] ?? CONTENT_TYPE_CONFIG.general
+  const Icon   = config.icon ?? (() => null)
+  const accent = config.accentVar ?? "var(--type-general)"
 
   // Header colour — same logic as tile-card
   const headerBg = block.contentType === "thesis"
@@ -321,8 +321,8 @@ export function GraphDetailPanel({
             <div className="h-px bg-border/40 mb-3" />
             <div className="space-y-1">
               {connectedBlocks.map(b => {
-                const bConfig = CONTENT_TYPE_CONFIG[b.contentType]
-                const BIcon   = bConfig.icon
+                const bConfig = CONTENT_TYPE_CONFIG[b.contentType] ?? CONTENT_TYPE_CONFIG.general
+                const BIcon   = bConfig.icon ?? (() => null)
                 return (
                   <button
                     key={b.id}

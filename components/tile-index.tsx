@@ -45,7 +45,7 @@ export function TileIndex({ blocks, onHighlight, highlightedId, onClose, isOpen,
     })
     return Array.from(cols).map(type => {
       const config = CONTENT_TYPE_CONFIG[type as ContentType] || CONTENT_TYPE_CONFIG.general
-      return { id: type, label: config.label, icon: config.icon }
+      return { id: type, label: config.label, icon: config.icon ?? FileText }
     })
   }, [blocks])
 

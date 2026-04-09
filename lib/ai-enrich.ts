@@ -2,6 +2,7 @@
 
 import { detectContentType } from "@/lib/detect-content-type"
 import { loadAIConfig, getBaseUrl, getProviderHeaders, getModelsForProvider } from "@/lib/ai-settings"
+import { normalizeBaseUrl, buildTryEndpoints, joinEndpoint } from "@/lib/ai-utils"
 import type { ContentType } from "@/lib/content-types"
 
 // ── Language detection ────────────────────────────────────────────────────────
@@ -301,29 +302,53 @@ You have live web access. For this note type, include 1–2 real source citation
   const userMessage = `${langDirective}<note_to_enrich>${safeText}</note_to_enrich>${urlContext}${categoryContext}${forcedTypeContext}${globalContext}`
 
   const baseUrl = getBaseUrl(config)
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: getProviderHeaders(config),
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user",   content: userMessage },
-      ],
-      // OpenAI search-preview models reject both response_format AND temperature;
-      // when web_search_options is present, omit both and rely on the schemaHint
-      // in the system prompt to get structured JSON output.
-      ...(webSearchOptions === undefined
-        ? {
-            response_format: useStrictSchema
-              ? { type: "json_schema", json_schema: JSON_SCHEMA }
-              : { type: "json_object" },
-            temperature: 0.1,
-          }
-        : { web_search_options: webSearchOptions }),
-    }),
-  })
 
+  // Normalize base and select candidate endpoints (may include the local proxy)
+  const normalizedBase = normalizeBaseUrl(baseUrl)
+  const tryEndpoints = buildTryEndpoints(config.provider, normalizedBase)
+
+  let response: Response | null = null
+  let lastError: unknown = null
+  for (const ep of tryEndpoints) {
+    const url = ep.startsWith("/") ? (ep === "/api/ollama" ? ep : joinEndpoint(normalizedBase, ep)) : ep
+    try {
+      const payload = {
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user",   content: userMessage },
+        ],
+        ...(webSearchOptions === undefined
+          ? {
+              response_format: useStrictSchema
+                ? { type: "json_schema", json_schema: JSON_SCHEMA }
+                : { type: "json_object" },
+              temperature: 0.1,
+            }
+          : { web_search_options: webSearchOptions }),
+      } as Record<string, unknown>
+      if (url === "/api/ollama") payload.baseUrl = normalizedBase
+
+      response = await fetch(url, {
+        method: "POST",
+        headers: getProviderHeaders(config),
+        body: JSON.stringify(payload),
+      })
+      if (response.ok) break
+      if (response.status === 404 || response.status === 405) {
+        response = null
+        continue
+      }
+      break
+    } catch (err) {
+      lastError = err
+      response = null
+    }
+  }
+
+  if (!response) {
+    throw new Error(`AI enrich error (${config.provider}): network error or no reachable endpoint. ${String(lastError ?? "")}`)
+  }
   if (!response.ok) {
     const err = await response.text()
     throw new Error(`AI enrich error (${config.provider}) ${response.status}: ${err}`)

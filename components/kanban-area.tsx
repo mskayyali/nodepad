@@ -3,7 +3,7 @@
 import { useMemo, useRef, useCallback, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { TileCard, type TextBlock } from "@/components/tile-card"
-import { Sparkles, CheckSquare, Clock } from "lucide-react"
+import { Sparkles, CheckSquare, Clock, FileText } from "lucide-react"
 import { CONTENT_TYPE_CONFIG, type ContentType } from "@/lib/content-types"
 import { getRelatedIds, useModKey } from "@/lib/utils"
 import { KanbanMinimap } from "./kanban-minimap"
@@ -128,7 +128,10 @@ export function KanbanArea({
               {/* Column Header */}
               <div className="flex items-center justify-between px-2 py-1 border-b border-border/40">
                 <div className="flex items-center gap-2">
-                  <col.icon className="h-4 w-4 text-muted-foreground" />
+                  {(() => {
+                    const Icon = col.icon ?? FileText
+                    return <Icon className="h-4 w-4 text-muted-foreground" />
+                  })()}
                   <h3 className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/70">
                     {col.title}
                   </h3>

@@ -13,7 +13,7 @@ import { IntroModal } from "@/components/intro-modal"
 import type { TextBlock } from "@/components/tile-card"
 import type { ContentType } from "@/lib/content-types"
 import { INITIAL_PROJECTS } from "@/lib/initial-data"
-import { useAISettings } from "@/lib/ai-settings"
+import { useAISettings, getPreset } from "@/lib/ai-settings"
 import { enrichBlockClient } from "@/lib/ai-enrich"
 import { generateGhostClient } from "@/lib/ai-ghost"
 import { exportToMarkdown, downloadMarkdown, copyToClipboard } from "@/lib/export"
@@ -863,8 +863,17 @@ export default function Page() {
       />
 
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        <StatusBar
-          blockCount={blocks.length}
+        {(() => {
+          const showModel = (settings.apiKey && settings.apiKey.trim() !== "") || settings.provider === "ollama"
+          const modelLabelToShow = showModel
+            ? (settings.provider === "ollama"
+                ? `Ollama - ${settings.modelId}`
+                : currentModel.shortLabel)
+            : undefined
+
+          return (
+            <StatusBar
+              blockCount={blocks.length}
           blocks={blocks}
           isSidebarOpen={isSidebarOpen}
           isIndexOpen={isIndexOpen}
@@ -874,15 +883,17 @@ export default function Page() {
           onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
           onIndexToggle={() => setIsIndexOpen(!isIndexOpen)}
           onGhostPanelToggle={() => setIsGhostPanelOpen(prev => !prev)}
-          modelLabel={settings.apiKey ? currentModel.shortLabel : undefined}
+          modelLabel={modelLabelToShow}
           showHelpTooltip={showHelpTooltip}
           onHelpTooltipDismiss={() => {
             setShowHelpTooltip(false)
             if (helpTooltipTimer.current) clearTimeout(helpTooltipTimer.current)
           }}
-        />
+            />
+          )
+        })()}
 
-        {!settings.apiKey && (
+        {!((settings.apiKey && settings.apiKey.trim() !== "") || settings.provider === "ollama") && (
           <div className="flex items-center justify-center gap-3 px-4 py-2 bg-amber-950/80 border-b border-amber-800/60 text-amber-200 text-xs shrink-0">
             <span className="opacity-80">⚡ AI enrichment is inactive — add an API key to classify and annotate your notes.</span>
             <div className="flex items-center gap-2 shrink-0">
