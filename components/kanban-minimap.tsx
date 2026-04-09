@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { type LucideIcon } from "lucide-react"
+import { type LucideIcon, FileText } from "lucide-react"
 
 interface MinimapColumn {
   id: string
@@ -27,7 +27,10 @@ export function KanbanMinimap({ columns, onColumnClick }: KanbanMinimapProps) {
           className="group relative flex items-center justify-center h-8 w-8 rounded-md hover:bg-white/10 transition-all active:scale-95"
           title={col.title}
         >
-          <col.icon className="h-4 w-4 text-foreground/60 group-hover:text-foreground transition-colors" />
+          {(() => {
+            const Icon = col.icon ?? FileText
+            return <Icon className="h-4 w-4 text-foreground/60 group-hover:text-foreground transition-colors" />
+          })()}
           
           {/* Indicator dot */}
           <div className="absolute -top-0.5 -right-0.5 h-3 w-3 flex items-center justify-center rounded-full bg-primary text-[7px] font-bold text-primary-foreground border-2 border-background scale-0 group-hover:scale-100 transition-transform">

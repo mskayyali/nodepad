@@ -201,7 +201,7 @@ export function AboutPanel({ open, onClose }: AboutPanelProps) {
             </p>
             <div className="grid grid-cols-2 gap-2">
               {CONTENT_TYPE_HIGHLIGHTS.map((type) => {
-                const config = CONTENT_TYPE_CONFIG[type]
+                const config = CONTENT_TYPE_CONFIG[type] ?? CONTENT_TYPE_CONFIG.general
                 const Icon = config.icon
                 return (
                   <div key={type} className="flex items-center gap-2.5 px-3 py-2 rounded-sm bg-secondary/50 border border-border/50">

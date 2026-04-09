@@ -1,6 +1,7 @@
 "use client"
 
 import { loadAIConfig, getBaseUrl, getProviderHeaders } from "@/lib/ai-settings"
+import { normalizeBaseUrl, buildTryEndpoints, joinEndpoint } from "@/lib/ai-utils"
 
 export interface GhostContext {
   text: string
@@ -51,17 +52,46 @@ Return ONLY valid JSON:
 {"text": "...", "category": "..."}`
 
   const baseUrl = getBaseUrl(config)
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: getProviderHeaders(config),
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-    }),
-  })
+  const normalizedBase = normalizeBaseUrl(baseUrl)
+  const tryEndpoints = buildTryEndpoints(config.provider, normalizedBase)
 
+  let response: Response | null = null
+  let lastError: unknown = null
+  for (const ep of tryEndpoints) {
+    const url = ep.startsWith("/") ? (ep === "/api/ollama" ? ep : joinEndpoint(normalizedBase, ep)) : ep
+    try {
+      // Include normalizedBase when routing through the local proxy so the
+      // server can forward to a custom baseUrl when configured by the user.
+      const payload = {
+        model,
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+      } as Record<string, unknown>
+      if (url === "/api/ollama") payload.baseUrl = normalizedBase
+
+      response = await fetch(url, {
+        method: "POST",
+        headers: getProviderHeaders(config),
+        body: JSON.stringify(payload),
+      })
+      if (response.ok) break
+      // If the route is missing, try the next candidate
+      if (response.status === 404 || response.status === 405) {
+        response = null
+        continue
+      }
+      // Other non-ok responses should surface immediately
+      break
+    } catch (err) {
+      lastError = err
+      response = null
+    }
+  }
+
+  if (!response) {
+    throw new Error(`AI ghost error (${config.provider}): network error or no reachable endpoint. ${String(lastError ?? "")}`)
+  }
   if (!response.ok) {
     const err = await response.text()
     throw new Error(`AI ghost error (${config.provider}) ${response.status}: ${err}`)
