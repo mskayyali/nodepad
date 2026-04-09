@@ -239,6 +239,8 @@ export async function enrichBlockClient(
   }
 
   const supportsJsonSchema = config.provider === "openrouter" || config.provider === "openai"
+  // Ollama may not support response_format at all depending on model; use json_object
+  // as a best-effort hint and rely on the schema prompt injection below
   // gpt-*-search-preview models have known issues with strict json_schema + web_search_options;
   // fall back to json_object mode (guaranteed valid JSON, no schema enforcement)
   const useStrictSchema = supportsJsonSchema && !webSearchOptions

@@ -17,7 +17,7 @@ import { useAISettings } from "@/lib/ai-settings"
 import { enrichBlockClient } from "@/lib/ai-enrich"
 import { generateGhostClient } from "@/lib/ai-ghost"
 import { exportToMarkdown, downloadMarkdown, copyToClipboard } from "@/lib/export"
-import { downloadNodepadFile, parseNodepadFile, NodepadParseError } from "@/lib/nodepad-format"
+import { downloadNodepadFile, parseNodepadFile, NodepadParseError, pickSaveLocation, writeToHandle } from "@/lib/nodepad-format"
 import { detectContentType } from "@/lib/detect-content-type"
 
 function generateId() {
@@ -54,6 +54,18 @@ export default function Page() {
   const helpTooltipTimer = useRef<NodeJS.Timeout | null>(null)
   const { settings, updateSettings, resolvedModelId, currentModel } = useAISettings()
   const debounceTimers = useRef<Record<string, Record<string, NodeJS.Timeout>>>({})
+
+  // ── File System Access API auto-save ─────────────────────────────────────
+  const fileHandlesRef = useRef<Record<string, FileSystemFileHandle>>({})
+  const [autoSaveProjects, setAutoSaveProjects] = useState<Set<string>>(new Set())
+
+  /** Silently write current project state to its linked file handle, if any. */
+  const autoSave = useCallback((projectId: string) => {
+    const handle = fileHandlesRef.current[projectId]
+    if (!handle) return
+    const proj = projectsRef.current.find(p => p.id === projectId)
+    if (proj) writeToHandle(handle, proj)
+  }, [])
 
   // ── Undo history ring (max 20 block snapshots per project) ───────────────
   const blockHistoryRef = useRef<Record<string, TextBlock[][]>>({})
@@ -244,6 +256,10 @@ export default function Page() {
   const projectsRef = useRef(projects)
   useEffect(() => { projectsRef.current = projects }, [projects])
 
+  // Stable ref for active project ID — lets useCallbacks avoid stale closure
+  const activeProjectIdRef = useRef(activeProjectId)
+  useEffect(() => { activeProjectIdRef.current = activeProjectId }, [activeProjectId])
+
   // Stable ref to active blocks — lets useCallbacks read current blocks without
   // listing `blocks` in their deps (which would recreate them on every state change
   // and cause all memo-ized TileCards to re-render unnecessarily).
@@ -359,6 +375,63 @@ export default function Page() {
       }))
     } catch (e) {
       console.error("Ghost note generation failed", e)
+      setProjects(prev => prev.map(p => p.id === projectId
+        ? { ...p, ghostNotes: (p.ghostNotes || []).filter(n => n.id !== ghostId) }
+        : p
+      ))
+    } finally {
+      generatingRef.current.delete(projectId)
+    }
+  }, [])
+
+  /** Manual synthesis — skips cooldown / block-count throttles, keeps safety checks. */
+  const manualGenerateGhost = useCallback(async (guidingThought?: string) => {
+    const projectId = activeProjectIdRef.current
+    const targetProject = projectsRef.current.find(p => p.id === projectId)
+    if (!targetProject) return
+
+    const enrichedBlocks = targetProject.blocks.filter(b => !b.isEnriching && b.category)
+    if (enrichedBlocks.length < 2) return // need at least some material
+
+    // Cap panel at 5 ghost notes
+    if ((targetProject.ghostNotes || []).length >= 5) return
+
+    // No concurrent generation
+    if (generatingRef.current.has(projectId)) return
+
+    // Require at least 2 distinct categories
+    const categories = new Set(enrichedBlocks.map(b => b.category).filter(Boolean))
+    if (categories.size < 2) return
+
+    generatingRef.current.add(projectId)
+    const ghostId = "ghost-" + generateId()
+
+    setProjects(prev => prev.map(p => p.id === projectId ? {
+      ...p,
+      ghostNotes: [...(p.ghostNotes || []), { id: ghostId, text: "", category: "thesis", isGenerating: true }],
+    } : p))
+
+    try {
+      const curated = buildGhostContext(enrichedBlocks)
+      const context = curated.map(b => ({
+        text: b.text,
+        category: b.category,
+        contentType: b.contentType,
+      }))
+      const previousSyntheses = (targetProject.lastGhostTexts || []).slice(-5)
+      const data = await generateGhostClient(context, previousSyntheses, guidingThought)
+      setProjects(prev => prev.map(p => {
+        if (p.id !== projectId) return p
+        return {
+          ...p,
+          ghostNotes: (p.ghostNotes || []).map(n =>
+            n.id === ghostId ? { ...n, text: data.text, category: data.category, isGenerating: false } : n
+          ),
+          lastGhostTexts: [...(p.lastGhostTexts || []), data.text].slice(-10),
+        }
+      }))
+    } catch (e) {
+      console.error("Manual ghost generation failed", e)
       setProjects(prev => prev.map(p => p.id === projectId
         ? { ...p, ghostNotes: (p.ghostNotes || []).filter(n => n.id !== ghostId) }
         : p
@@ -491,6 +564,8 @@ export default function Page() {
             })
 
             setTimeout(() => generateGhostNote(projectId), 2500)
+            // Auto-save after enrichment completes (captures annotations)
+            setTimeout(() => autoSave(projectId), 200)
         } catch (e: any) {
           console.error(e)
           const isNoKey = e?.message?.includes("No API key") || false
@@ -532,7 +607,9 @@ export default function Page() {
       enrichBlock(p.id, newId, text, category, "thesis")
       return updatedProject
     })
-  }, [activeProject, updateActiveProject, enrichBlock])
+    // Auto-save after claiming a synthesis
+    setTimeout(() => autoSave(activeProjectId), 100)
+  }, [activeProject, activeProjectId, updateActiveProject, enrichBlock, autoSave])
 
   const dismissGhostNote = useCallback((id: string) => {
     updateActiveProject(p => ({
@@ -619,8 +696,10 @@ export default function Page() {
 
       setIsCommandKOpen(false)
       enrichBlock(activeProjectId, newId, resolvedText, undefined, enrichForcedType).catch(console.error)
+      // Auto-save after adding a new block (deferred so state has flushed)
+      setTimeout(() => autoSave(activeProjectId), 100)
     },
-    [activeProjectId, pushHistory, updateActiveProject, enrichBlock]
+    [activeProjectId, pushHistory, updateActiveProject, enrichBlock, autoSave]
   )
 
   const deleteBlock = useCallback((id: string) => {
@@ -797,11 +876,19 @@ export default function Page() {
     
     // .nodepad export / import
     else if (cmd === "export-nodepad") {
-      setProjects(prev => {
-        const proj = prev.find(p => p.id === activeProjectId)
-        if (proj) downloadNodepadFile(proj)
-        return prev
-      })
+      const proj = projectsRef.current.find(p => p.id === activeProjectId)
+      if (proj) {
+        // Try File System Access API (save picker + auto-save); fall back to
+        // a plain browser download when unavailable (HTTP, Firefox, etc.)
+        pickSaveLocation(proj).then(handle => {
+          if (handle) {
+            fileHandlesRef.current[activeProjectId] = handle
+            setAutoSaveProjects(prev => new Set(prev).add(activeProjectId))
+          } else {
+            downloadNodepadFile(proj)
+          }
+        })
+      }
     } else if (cmd === "import-nodepad") {
       importInputRef.current?.click()
     }
@@ -874,7 +961,8 @@ export default function Page() {
           onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
           onIndexToggle={() => setIsIndexOpen(!isIndexOpen)}
           onGhostPanelToggle={() => setIsGhostPanelOpen(prev => !prev)}
-          modelLabel={settings.apiKey ? currentModel.shortLabel : undefined}
+          modelLabel={settings.apiKey || settings.provider === "ollama" ? currentModel.shortLabel : undefined}
+          isAutoSaving={autoSaveProjects.has(activeProjectId)}
           showHelpTooltip={showHelpTooltip}
           onHelpTooltipDismiss={() => {
             setShowHelpTooltip(false)
@@ -882,7 +970,7 @@ export default function Page() {
           }}
         />
 
-        {!settings.apiKey && (
+        {!settings.apiKey && settings.provider !== "ollama" && (
           <div className="flex items-center justify-center gap-3 px-4 py-2 bg-amber-950/80 border-b border-amber-800/60 text-amber-200 text-xs shrink-0">
             <span className="opacity-80">⚡ AI enrichment is inactive — add an API key to classify and annotate your notes.</span>
             <div className="flex items-center gap-2 shrink-0">
@@ -965,6 +1053,7 @@ export default function Page() {
             onClose={() => setIsGhostPanelOpen(false)}
             onClaim={claimGhostNote}
             onDismiss={dismissGhostNote}
+            onGenerate={manualGenerateGhost}
           />
         </div>
 

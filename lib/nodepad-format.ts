@@ -124,6 +124,58 @@ export function downloadNodepadFile(project: {
   URL.revokeObjectURL(url)
 }
 
+// ── File System Access API (auto-save) ───────────────────────────────────────
+
+type ProjectLike = {
+  id: string; name: string; blocks: any[]; collapsedIds: string[]
+  ghostNotes?: any[]; lastGhostTexts?: string[]
+  lastGhostBlockCount?: number; lastGhostTimestamp?: number
+}
+
+/**
+ * Open a save-file picker and return a FileSystemFileHandle the app can
+ * write to repeatedly without further prompts. Returns null if the user
+ * cancels or the API is unavailable.
+ */
+export async function pickSaveLocation(project: ProjectLike): Promise<FileSystemFileHandle | null> {
+  if (typeof window === "undefined" || !("showSaveFilePicker" in window)) return null
+  const slug = project.name
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .slice(0, 60)
+  try {
+    const handle = await (window as any).showSaveFilePicker({
+      suggestedName: `${slug || "project"}.nodepad`,
+      types: [{
+        description: "Nodepad project",
+        accept: { "application/json": [".nodepad"] },
+      }],
+    })
+    // Write the initial export immediately
+    await writeToHandle(handle, project)
+    return handle
+  } catch {
+    return null // user cancelled
+  }
+}
+
+/** Write the current project state to an existing file handle. */
+export async function writeToHandle(
+  handle: FileSystemFileHandle,
+  project: ProjectLike,
+): Promise<boolean> {
+  try {
+    const data = serialiseProject(project)
+    const writable = await (handle as any).createWritable()
+    await writable.write(JSON.stringify(data, null, 2))
+    await writable.close()
+    return true
+  } catch {
+    return false
+  }
+}
+
 // ── Import ────────────────────────────────────────────────────────────────────
 
 export class NodepadParseError extends Error {}

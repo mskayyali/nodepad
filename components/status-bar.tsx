@@ -6,7 +6,7 @@ import { CONTENT_TYPE_CONFIG } from "@/lib/content-types"
 import type { TextBlock } from "@/components/tile-card"
 import { AboutPanel } from "@/components/about-panel"
 
-import { Menu, LayoutList, Sparkles } from "lucide-react"
+import { HardDriveDownload, Menu, LayoutList, Sparkles } from "lucide-react"
 
 interface StatusBarProps {
   blockCount: number
@@ -20,6 +20,7 @@ interface StatusBarProps {
   onIndexToggle: () => void
   onGhostPanelToggle: () => void
   modelLabel?: string
+  isAutoSaving?: boolean
   showHelpTooltip?: boolean
   onHelpTooltipDismiss?: () => void
 }
@@ -36,6 +37,7 @@ export function StatusBar({
   onIndexToggle,
   onGhostPanelToggle,
   modelLabel,
+  isAutoSaving,
   showHelpTooltip,
   onHelpTooltipDismiss,
 }: StatusBarProps) {
@@ -99,6 +101,11 @@ export function StatusBar({
             <div className="flex items-center gap-2 ml-1">
               <span className="text-muted-foreground/20 font-mono text-[10px]">/</span>
               <span className="font-mono text-[9px] text-muted-foreground font-bold uppercase tracking-[0.2em]">{activeProjectName}</span>
+              {isAutoSaving && (
+                <span className="flex items-center gap-1 text-primary/50" title="Auto-saving to .nodepad file">
+                  <HardDriveDownload className="h-3 w-3" />
+                </span>
+              )}
             </div>
           )}
         </div>

@@ -1,7 +1,8 @@
 "use client"
 
+import { useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Check, Sparkles, X } from "lucide-react"
+import { Check, MessageSquare, Plus, Sparkles, X } from "lucide-react"
 
 export interface GhostNote {
   id: string
@@ -16,9 +17,18 @@ interface GhostPanelProps {
   onClose: () => void
   onClaim: (id: string) => void
   onDismiss: (id: string) => void
+  onGenerate: (guidingThought?: string) => void
 }
 
-export function GhostPanel({ ghostNotes, isOpen, onClose, onClaim, onDismiss }: GhostPanelProps) {
+export function GhostPanel({ ghostNotes, isOpen, onClose, onClaim, onDismiss, onGenerate }: GhostPanelProps) {
+  const isGenerating = ghostNotes.some(n => n.isGenerating)
+  const isFull = ghostNotes.length >= 5
+  const [guidingEnabled, setGuidingEnabled] = useState(false)
+  const [guidingText, setGuidingText] = useState("")
+
+  const handleGenerate = () => {
+    onGenerate(guidingEnabled && guidingText.trim() ? guidingText.trim() : undefined)
+  }
   return (
     <div
       style={{
@@ -44,12 +54,22 @@ export function GhostPanel({ ghostNotes, isOpen, onClose, onClaim, onDismiss }: 
               </span>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 px-1.5 hover:bg-white/5 rounded-sm transition-colors text-muted-foreground/30 hover:text-white"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleGenerate}
+              disabled={isGenerating || isFull}
+              title={isFull ? "Panel full — dismiss a thesis first" : isGenerating ? "Generating…" : "Generate synthesis"}
+              className="p-1 px-1.5 hover:bg-primary/10 rounded-sm transition-colors text-muted-foreground/30 hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1 px-1.5 hover:bg-white/5 rounded-sm transition-colors text-muted-foreground/30 hover:text-white"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Note list */}
@@ -126,11 +146,70 @@ export function GhostPanel({ ghostNotes, isOpen, onClose, onClaim, onDismiss }: 
           )}
         </div>
 
-        {/* Footer */}
-        <div className="border-t border-border/30 px-3 py-2 shrink-0">
-          <p className="font-mono text-[8px] text-muted-foreground/20 uppercase tracking-[0.15em] text-center">
-            Generated from your writing patterns
-          </p>
+        {/* Guiding Thoughts + Generate */}
+        <div className="border-t border-border/30 px-3 py-2.5 shrink-0 flex flex-col gap-2">
+          {/* Checkbox toggle */}
+          <button
+            onClick={() => setGuidingEnabled(v => !v)}
+            className="flex items-center gap-2 group w-full text-left"
+          >
+            <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-colors ${
+              guidingEnabled ? "border-primary bg-primary/20" : "border-white/15 group-hover:border-white/30"
+            }`}>
+              {guidingEnabled && <Check className="h-2.5 w-2.5 text-primary" />}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <MessageSquare className="h-3 w-3 text-muted-foreground/40" />
+              <span className="font-mono text-[9px] font-bold uppercase tracking-[0.1em] text-muted-foreground/50 group-hover:text-muted-foreground/70 transition-colors">
+                Guiding Thought
+              </span>
+            </div>
+          </button>
+
+          {/* Textarea — collapsible */}
+          <AnimatePresence initial={false}>
+            {guidingEnabled && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="overflow-hidden"
+              >
+                <textarea
+                  value={guidingText}
+                  onChange={e => setGuidingText(e.target.value)}
+                  placeholder="e.g. Focus on tensions between technology and human agency..."
+                  rows={3}
+                  className="w-full resize-none rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/30 outline-none focus:border-primary/40 transition-colors leading-relaxed"
+                  spellCheck={false}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Generate button */}
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating || isFull}
+            className="flex items-center gap-1.5 w-full justify-center rounded-sm bg-primary/15 hover:bg-primary/25 disabled:opacity-30 disabled:cursor-not-allowed px-2.5 py-1.5 font-mono text-[9px] font-black uppercase tracking-wider text-primary transition-colors"
+          >
+            {isGenerating ? (
+              <>
+                <div className="flex space-x-0.5">
+                  <div className="h-1 w-1 animate-bounce rounded-full bg-primary/60 [animation-delay:-0.3s]" />
+                  <div className="h-1 w-1 animate-bounce rounded-full bg-primary/60 [animation-delay:-0.15s]" />
+                  <div className="h-1 w-1 animate-bounce rounded-full bg-primary/60" />
+                </div>
+                Synthesizing
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3 w-3" />
+                Generate
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

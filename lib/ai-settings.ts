@@ -12,7 +12,7 @@ export interface AIModel {
   groundingModelId?: string
 }
 
-export type AIProvider = "openrouter" | "openai" | "zai"
+export type AIProvider = "openrouter" | "openai" | "zai" | "ollama"
 
 export interface AIProviderPreset {
   id: AIProvider
@@ -43,6 +43,13 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     baseUrl: "https://api.z.ai/api/paas/v4",
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     keyPlaceholder: "Your Z.ai API key",
+  },
+  {
+    id: "ollama",
+    label: "Ollama (Local)",
+    baseUrl: "/api/ollama/v1",
+    keyUrl: "",
+    keyPlaceholder: "No key needed — runs locally",
   },
 ]
 
@@ -162,7 +169,51 @@ export const ZAI_MODELS: AIModel[] = [
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
   if (provider === "openai") return OPENAI_MODELS
   if (provider === "zai")    return ZAI_MODELS
+  if (provider === "ollama") return [] // static list empty — use fetchOllamaModels() for live list
   return AI_MODELS // openrouter + safe fallback for any stale localStorage value
+}
+
+interface OllamaModel {
+  name: string
+  size: number
+  details?: {
+    parameter_size?: string
+    family?: string
+    quantization_level?: string
+  }
+}
+
+/** Families / name patterns that are embedding-only and can't do chat completions. */
+const EMBEDDING_PATTERNS = /\bembed|^nomic-bert|^bge-|^mxbai-embed|^all-minilm/i
+
+/** Fetch locally-available chat models via the server-side Ollama proxy (avoids CORS). */
+export async function fetchOllamaModels(): Promise<AIModel[]> {
+  try {
+    const res = await fetch("/api/ollama/api/tags")
+    if (!res.ok) return []
+    const data = await res.json()
+    const raw: OllamaModel[] = data.models ?? []
+    return raw
+      .filter(m => !EMBEDDING_PATTERNS.test(m.name) && !EMBEDDING_PATTERNS.test(m.details?.family ?? ""))
+      .map(m => {
+        const sizeGB = (m.size / 1e9).toFixed(1)
+        const params = m.details?.parameter_size ?? ""
+        const quant = m.details?.quantization_level ?? ""
+        const isCloud = m.name.endsWith(":cloud") || Number(m.size) < 10_000
+        const desc = isCloud
+          ? "Cloud-hosted via Ollama"
+          : [params, quant, `${sizeGB} GB`].filter(Boolean).join(" · ")
+        return {
+          id: m.name,
+          label: m.name.replace(/:latest$/, ""),
+          shortLabel: m.name.replace(/:latest$/, "").split(":")[0],
+          description: desc,
+          supportsGrounding: false,
+        }
+      })
+  } catch {
+    return []
+  }
 }
 
 export const DEFAULT_MODEL_ID = "openai/gpt-4o"
@@ -203,7 +254,8 @@ export interface AIConfig {
 
 export function loadAIConfig(): AIConfig | null {
   const s = loadSettings()
-  if (!s.apiKey) return null
+  // Ollama runs locally and needs no API key; all other providers require one
+  if (!s.apiKey && s.provider !== "ollama") return null
   const models = getModelsForProvider(s.provider)
   const model = models.find(m => m.id === s.modelId)
   // Use the matched model's id if found; otherwise fall back to the first model
@@ -211,7 +263,7 @@ export function loadAIConfig(): AIConfig | null {
   // OpenRouter-prefixed id (e.g. "openai/gpt-4o") after switching to OpenAI —
   // that string won't match any entry in OPENAI_MODELS so we fall back to "gpt-4o".
   const modelId = model?.id ?? models[0]?.id ?? s.modelId ?? DEFAULT_MODEL_ID
-  // Z.ai does not support grounding; only openrouter and openai do
+  // Only openrouter and openai support grounding
   const supportsGrounding =
     (s.provider === "openrouter" || s.provider === "openai") &&
     s.webGrounding &&
@@ -226,7 +278,10 @@ export function getBaseUrl(config: AIConfig): string {
 export function getProviderHeaders(config: AIConfig): Record<string, string> {
   const base: Record<string, string> = {
     "Content-Type": "application/json",
-    "Authorization": `Bearer ${config.apiKey}`,
+  }
+  // Ollama runs locally and typically needs no auth
+  if (config.provider !== "ollama") {
+    base["Authorization"] = `Bearer ${config.apiKey}`
   }
   if (config.provider === "openrouter") {
     base["HTTP-Referer"] = "https://nodepad.space"

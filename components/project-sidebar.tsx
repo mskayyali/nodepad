@@ -22,9 +22,11 @@ import {
 import {
   AI_PROVIDER_PRESETS,
   getModelsForProvider,
+  fetchOllamaModels,
   getPreset,
   type AISettings,
   type AIProvider,
+  type AIModel,
 } from "@/lib/ai-settings"
 
 interface Project {
@@ -75,6 +77,8 @@ export function ProjectSidebar({
   const [providerOpen, setProviderOpen] = useState(false)
   // local draft for settings (only save on "Save")
   const [draft, setDraft] = useState<AISettings>(aiSettings)
+  const [ollamaModels, setOllamaModels] = useState<AIModel[]>([])
+  const [ollamaLoading, setOllamaLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -97,6 +101,26 @@ export function ProjectSidebar({
     }
   }, [openToSettings])
 
+  // Fetch available models from local Ollama when provider is switched to ollama
+  useEffect(() => {
+    if (draft.provider !== "ollama") { setOllamaModels([]); return }
+    let cancelled = false
+    setOllamaLoading(true)
+    fetchOllamaModels().then(models => {
+      if (cancelled) return
+      setOllamaModels(models)
+      // Auto-select the first model if none is set
+      if (models.length > 0) {
+        setDraft(d => {
+          const current = models.find(m => m.id === d.modelId)
+          return current ? d : { ...d, modelId: models[0].id }
+        })
+      }
+      setOllamaLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [draft.provider])
+
   const handleRename = (id: string) => {
     if (editName.trim()) onRenameProject(id, editName.trim())
     setEditingId(null)
@@ -118,7 +142,8 @@ export function ProjectSidebar({
   }
 
   const currentPreset = getPreset(draft.provider)
-  const models = getModelsForProvider(draft.provider)
+  const staticModels = getModelsForProvider(draft.provider)
+  const models = draft.provider === "ollama" ? ollamaModels : staticModels
   const selectedModel = models.find(m => m.id === draft.modelId) || models[0] || undefined
 
   return (
@@ -337,7 +362,8 @@ export function ProjectSidebar({
                   </div>
                 </div>
 
-                {/* API Key */}
+                {/* API Key — hidden for Ollama (local, no key needed) */}
+                {draft.provider !== "ollama" ? (
                 <div className="flex flex-col gap-2">
                   <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
                     API Key
@@ -368,13 +394,62 @@ export function ProjectSidebar({
                     )}
                   </p>
                 </div>
+                ) : (
+                <div className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2">
+                  <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
+                    Ollama runs locally — no API key needed. Make sure Ollama is running on <span className="text-foreground">localhost:11434</span>.
+                  </p>
+                </div>
+                )}
 
                 {/* Model Selector */}
                 <div className="flex flex-col gap-2">
-                  <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                    Model
-                  </label>
-                  {models.length === 0 ? (
+                  <div className="flex items-center justify-between">
+                    <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                      Model
+                    </label>
+                    {draft.provider === "ollama" && (
+                      <button
+                        onClick={() => {
+                          setOllamaLoading(true)
+                          fetchOllamaModels().then(m => {
+                            setOllamaModels(m)
+                            if (m.length > 0) {
+                              setDraft(d => {
+                                const stillPresent = m.find(x => x.id === d.modelId)
+                                return stillPresent ? d : { ...d, modelId: m[0].id }
+                              })
+                            }
+                            setOllamaLoading(false)
+                          })
+                        }}
+                        disabled={ollamaLoading}
+                        className="font-mono text-[9px] text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+                      >
+                        {ollamaLoading ? "Loading…" : "Refresh"}
+                      </button>
+                    )}
+                  </div>
+                  {models.length === 0 && draft.provider === "ollama" && ollamaLoading ? (
+                    <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2.5">
+                      <span className="font-mono text-[11px] text-muted-foreground">Connecting to Ollama…</span>
+                    </div>
+                  ) : models.length === 0 && draft.provider === "ollama" && !ollamaLoading ? (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                        <input
+                          type="text"
+                          value={draft.modelId}
+                          onChange={e => setDraft(d => ({ ...d, modelId: e.target.value }))}
+                          placeholder="e.g. llama3, mistral, gemma2"
+                          className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                      </div>
+                      <p className="font-mono text-[9px] text-muted-foreground/60">No models found — is Ollama running? Type a model name manually or hit Refresh.</p>
+                    </div>
+                  ) : models.length === 0 ? (
                     <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
                       <input
                         type="text"
@@ -467,12 +542,14 @@ export function ProjectSidebar({
 
                 {/* API Status */}
                 <div className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${
-                  draft.apiKey
+                  draft.apiKey || draft.provider === "ollama"
                     ? "bg-primary/10 border border-primary/20 text-primary"
                     : "bg-white/5 border border-white/5 text-muted-foreground"
                 }`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${draft.apiKey ? "bg-primary animate-pulse" : "bg-white/30"}`} />
-                  {draft.apiKey ? `${currentPreset.label} — API key configured` : "No API key — AI disabled"}
+                  <span className={`h-1.5 w-1.5 rounded-full ${draft.apiKey || draft.provider === "ollama" ? "bg-primary animate-pulse" : "bg-white/30"}`} />
+                  {draft.provider === "ollama"
+                    ? `Ollama — local model${draft.modelId ? ` (${draft.modelId})` : ""}`
+                    : draft.apiKey ? `${currentPreset.label} — API key configured` : "No API key — AI disabled"}
                 </div>
               </motion.div>
             )}
