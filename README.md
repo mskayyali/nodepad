@@ -105,6 +105,15 @@ GLM models from Zhipu AI. Get a key at [z.ai](https://z.ai/manage-apikey/apikey-
 | `glm-5` | Z.ai flagship model. |
 | `glm-5-turbo` | Fast, community-tested. |
 
+### Claude CLI *(local)*
+Runs Claude entirely on your machine — no API key, no direct API calls to an AI provider. Requires the app to be started with `npm run dev:with-local-models` (see [Running local models](#running-local-models)).
+
+| Model | Notes |
+|---|---|
+| `claude-sonnet-4-6` | Best balance of speed and quality. |
+| `claude-opus-4-6` | Most capable Claude model. |
+| `claude-haiku-4-5` | Fast and lightweight. |
+
 ---
 
 ## Keyboard shortcuts
