@@ -177,7 +177,7 @@ export function AboutPanel({ open, onClose }: AboutPanelProps) {
           <Section title="Quick start">
             <div className="space-y-4">
               <Step n={1} title="Add your API key">
-                Open the sidebar (menu button top-left) → Settings → choose your provider and paste your API key. OpenRouter offers free credits at openrouter.ai. Without a key the app works but AI enrichment is disabled.
+                Open the sidebar (☰ top-left) → Settings. The default provider is OpenRouter — create a free account at openrouter.ai and paste your key. You can use <strong className="text-foreground/80">free models</strong> (Nemotron 30B or 120B) with no credits, or add credits to access GPT-4o, Claude Sonnet, Gemini 2.5 Pro, and DeepSeek. OpenAI and Z.ai are also supported as direct providers.
               </Step>
               <Step n={2} title="Capture anything">
                 Type a thought, paste a quote, drop a URL, or write a question into the input bar at the bottom and press Enter. nodepad classifies it automatically.
@@ -289,7 +289,7 @@ export function AboutPanel({ open, onClose }: AboutPanelProps) {
                 <FolderInput className="h-4 w-4 flex-shrink-0 text-primary/70 mt-0.5" />
                 <div>
                   <p className="text-sm font-semibold text-foreground mb-0.5">Your data, locally</p>
-                  <p className="text-sm text-muted-foreground">Everything is stored in your browser's localStorage — no account, no cloud sync, no data sent to any server except your notes being enriched via OpenRouter (using your own API key).</p>
+                  <p className="text-sm text-muted-foreground">Everything is stored in your browser's localStorage — no account, no cloud sync. Notes are sent to the AI provider of your choice (OpenRouter, OpenAI, or Z.ai) using your own API key. Nothing is stored server-side.</p>
                 </div>
               </div>
             </div>

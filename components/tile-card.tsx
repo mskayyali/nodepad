@@ -533,7 +533,9 @@ export const TileCard = memo(function TileCard({
                         <span className="mt-px font-mono text-[9px] text-red-400/80 uppercase tracking-wider leading-relaxed">
                           {block.statusText === "no-api-key"
                             ? <>AI enrichment failed — no API key. Open the <strong className="text-red-300">☰ sidebar → Settings</strong> to add your API key.</>
-                            : "Enrichment failed. Double-click to retry."}
+                            : block.statusText
+                              ? <>{block.statusText}{" "}<span className="opacity-60">Double-click to retry.</span></>
+                              : "Enrichment failed. Double-click to retry."}
                         </span>
                       </div>
                     )}

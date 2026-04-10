@@ -13,7 +13,7 @@ export interface AIModel {
   groundingModelId?: string
 }
 
-export type AIProvider = "openrouter" | "openai" | "claude-cli"
+export type AIProvider = "openrouter" | "openai" | "zai" | "claude-cli"
 
 export interface AIProviderPreset {
   id: AIProvider
@@ -37,6 +37,13 @@ const ALL_PROVIDER_PRESETS: AIProviderPreset[] = [
     baseUrl: "https://api.openai.com/v1",
     keyUrl: "https://platform.openai.com/api-keys",
     keyPlaceholder: "sk-...",
+  },
+  {
+    id: "zai",
+    label: "Z.ai",
+    baseUrl: "https://api.z.ai/api/paas/v4",
+    keyUrl: "https://z.ai/manage-apikey/apikey-list",
+    keyPlaceholder: "Your Z.ai API key",
   },
   {
     id: "claude-cli",
@@ -91,6 +98,21 @@ export const AI_MODELS: AIModel[] = [
     label: "Mistral Small 3.2",
     shortLabel: "Mistral",
     description: "Fast, excellent structured outputs",
+    supportsGrounding: false,
+  },
+  // ── Free tier (no credits required, ~200 req/day limit) ─────────────────
+  {
+    id: "nvidia/nemotron-3-nano-30b-a3b:free",
+    label: "Nemotron 30B · Free",
+    shortLabel: "Nemotron",
+    description: "Free · no credits · ~200 req/day · Nvidia-hosted",
+    supportsGrounding: false,
+  },
+  {
+    id: "nvidia/nemotron-3-super-120b-a12b:free",
+    label: "Nemotron 120B · Free",
+    shortLabel: "Nemotron",
+    description: "Free · no credits · ~200 req/day · Nvidia-hosted · MoE",
     supportsGrounding: false,
   },
 ]
@@ -159,8 +181,40 @@ export const OPENAI_MODELS: AIModel[] = [
   },
 ]
 
+export const ZAI_MODELS: AIModel[] = [
+  {
+    id: "glm-4.5",
+    label: "GLM-4.5",
+    shortLabel: "GLM-4.5",
+    description: "Fast, cost-efficient Z.ai model",
+    supportsGrounding: false,
+  },
+  {
+    id: "glm-4.7",
+    label: "GLM-4.7",
+    shortLabel: "GLM-4.7",
+    description: "Strong reasoning, 200K context",
+    supportsGrounding: false,
+  },
+  {
+    id: "glm-5",
+    label: "GLM-5",
+    shortLabel: "GLM-5",
+    description: "Z.ai flagship model",
+    supportsGrounding: false,
+  },
+  {
+    id: "glm-5-turbo",
+    label: "GLM-5 Turbo",
+    shortLabel: "GLM-5 Turbo",
+    description: "Fast, capable, community tested",
+    supportsGrounding: false,
+  },
+]
+
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
   if (provider === "openai") return OPENAI_MODELS
+  if (provider === "zai")    return ZAI_MODELS
   if (provider === "claude-cli") return CLAUDE_CLI_MODELS
   return AI_MODELS // openrouter + safe fallback for any stale localStorage value
 }
@@ -211,6 +265,7 @@ export function loadAIConfig(): AIConfig | null {
   // OpenRouter-prefixed id (e.g. "openai/gpt-4o") after switching to OpenAI —
   // that string won't match any entry in OPENAI_MODELS so we fall back to "gpt-4o".
   const modelId = model?.id ?? models[0]?.id ?? s.modelId ?? DEFAULT_MODEL_ID
+  // Z.ai does not support grounding; only openrouter and openai do
   const supportsGrounding =
     s.provider !== "claude-cli" &&
     s.webGrounding &&
@@ -260,9 +315,11 @@ export function useAISettings() {
     apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false,
     provider: DEFAULT_PROVIDER, customBaseUrl: "",
   })
+  const [isHydrated, setIsHydrated] = useState(false)
 
   useEffect(() => {
     setSettings(loadSettings())
+    setIsHydrated(true)
   }, [])
 
   const updateSettings = useCallback((patch: Partial<AISettings>) => {
@@ -292,5 +349,5 @@ export function useAISettings() {
     supportsGrounding: false,
   }
 
-  return { settings, updateSettings, resolvedModelId, currentModel, models }
+  return { settings, updateSettings, resolvedModelId, currentModel, models, isHydrated }
 }

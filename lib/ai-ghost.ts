@@ -1,6 +1,7 @@
 "use client"
 
 import { loadAIConfig, getBaseUrl, getProviderHeaders } from "@/lib/ai-settings"
+import { parseProviderError } from "@/lib/ai-enrich"
 
 export interface GhostContext {
   text: string
@@ -50,12 +51,17 @@ ${context.map(c =>
 Return ONLY valid JSON:
 {"text": "...", "category": "..."}`
 
+  // Ghost synthesis is always a short JSON object (15–25 word thesis + category).
+  // Cap output to keep cost low and avoid 402 on limited-credit accounts.
+  const MAX_GHOST_OUTPUT_TOKENS = 220
+
   const baseUrl = getBaseUrl(config)
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: getProviderHeaders(config),
     body: JSON.stringify({
       model,
+      max_tokens: MAX_GHOST_OUTPUT_TOKENS,
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
       temperature: 0.7,
@@ -63,12 +69,18 @@ Return ONLY valid JSON:
   })
 
   if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`AI ghost error (${config.provider}) ${response.status}: ${err}`)
+    throw new Error(await parseProviderError(response))
   }
 
-  const data = await response.json()
-  const rawContent = data.choices?.[0]?.message?.content
+  let data: Record<string, unknown>
+  try {
+    data = await response.json()
+  } catch {
+    throw new Error(
+      `AI ghost error (${config.provider}): response was not valid JSON. The provider may have timed out or returned a truncated response.`
+    )
+  }
+  const rawContent = (data.choices as Array<{ message?: { content?: string } }>)?.[0]?.message?.content
   if (!rawContent) throw new Error("No content in AI response")
 
   // Defensive parse

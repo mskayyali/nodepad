@@ -52,7 +52,7 @@ export default function Page() {
   const [isIntroOpen, setIsIntroOpen] = useState(false)
   const [showHelpTooltip, setShowHelpTooltip] = useState(false)
   const helpTooltipTimer = useRef<NodeJS.Timeout | null>(null)
-  const { settings, updateSettings, resolvedModelId, currentModel } = useAISettings()
+  const { settings, updateSettings, resolvedModelId, currentModel, isHydrated } = useAISettings()
   const debounceTimers = useRef<Record<string, Record<string, NodeJS.Timeout>>>({})
 
   // ── Undo history ring (max 20 block snapshots per project) ───────────────
@@ -369,145 +369,137 @@ export default function Page() {
   }, [])
 
   const enrichBlock = useCallback(async (projectId: string, id: string, text: string, category?: string, forcedType?: string) => {
-    setProjects(prevProjects => {
-      const targetProject = prevProjects.find(p => p.id === projectId)
-      if (!targetProject) return prevProjects
+    // Read context directly from the ref — avoids wrapping in setProjects() which
+    // React StrictMode double-invokes in development, causing two concurrent
+    // enrichment requests and a visible category flicker.
+    const targetProject = projectsRef.current.find(p => p.id === projectId)
+    if (!targetProject) return
 
-      const context = targetProject.blocks
-        .filter((b) => b.id !== id && !b.isEnriching)
-        .map((b) => ({
-          id: b.id,
-          text: b.text,
-          category: b.category,
-          annotation: b.annotation,
-        }))
-        .slice(-15)
+    const context = targetProject.blocks
+      .filter((b) => b.id !== id && !b.isEnriching)
+      .map((b) => ({
+        id: b.id,
+        text: b.text,
+        category: b.category,
+        annotation: b.annotation,
+      }))
+      .slice(-15)
 
-      const performEnrich = async () => {
-        try {
-          const data = await enrichBlockClient(
-            text,
-            context.map(({ id, ...rest }) => ({ id, ...rest })),
-            forcedType,
-            category,
-          )
+    try {
+      const data = await enrichBlockClient(
+        text,
+        context.map(({ id, ...rest }) => ({ id, ...rest })),
+        forcedType,
+        category,
+      )
 
-          // Map indices back to stable block IDs — the context array carries
-          // the original block IDs so we get exact, rename-proof references.
-          const influencedBy = data.influencedByIndices
-              ? (data.influencedByIndices as number[])
-                  .map((idx) => context[idx]?.id)
-                  .filter(Boolean) as string[]
-              : []
+      // Map indices back to stable block IDs — the context array carries
+      // the original block IDs so we get exact, rename-proof references.
+      const influencedBy = data.influencedByIndices
+        ? (data.influencedByIndices as number[])
+            .map((idx) => context[idx]?.id)
+            .filter(Boolean) as string[]
+        : []
 
-            setProjects((current: Project[]) => {
-              const mergeTargetIdx = data.mergeWithIndex
-              const mergeTargetId = mergeTargetIdx !== null && context[mergeTargetIdx] ? context[mergeTargetIdx].id : null
+      setProjects((current: Project[]) => {
+        const mergeTargetIdx = data.mergeWithIndex
+        const mergeTargetId = mergeTargetIdx !== null && context[mergeTargetIdx] ? context[mergeTargetIdx].id : null
 
-              return current.map(proj => {
-                if (proj.id !== projectId) return proj
+        return current.map(proj => {
+          if (proj.id !== projectId) return proj
 
-                if (mergeTargetId) {
-                  return {
-                    ...proj,
-                    blocks: proj.blocks
-                      .filter(b => b.id !== id)
-                      .map(b => b.id === mergeTargetId ? {
-                        ...b,
-                        text: b.text + "\n\n" + text,
-                        contentType: data.contentType,
-                        category: data.category,
-                        annotation: data.annotation,
-                        confidence: data.confidence,
-                        influencedBy,
-                        isUnrelated: data.isUnrelated,
-                        sources: data.sources ?? undefined,
-                        isEnriching: false,
-                        statusText: undefined,
-                        isError: false,
-                      } : b)
-                  }
-                }
-                if (data.contentType === "task") {
-                  const existingTaskIndex = proj.blocks.findIndex(b => b.contentType === "task" && b.id !== id)
-                  if (existingTaskIndex !== -1) {
-                    const existingTask = proj.blocks[existingTaskIndex]
-                    const newSubTask = {
-                      id: Math.random().toString(36).substring(2, 9),
-                      text: text,
-                      isDone: false,
-                      timestamp: Date.now()
-                    }
-                    
-                    return {
-                      ...proj,
-                      blocks: proj.blocks
-                        .filter(b => b.id !== id)
-                        .map(b => b.id === existingTask.id ? {
-                          ...b,
-                          subTasks: [...(b.subTasks || []), newSubTask],
-                          isEnriching: false,
-                          statusText: undefined
-                        } : b)
-                    }
-                  } else {
-                    return {
-                      ...proj,
-                      blocks: proj.blocks.map(b => b.id === id ? {
-                        ...b,
-                        contentType: "task",
-                        category: "Tasks",
-                        subTasks: [{
-                          id: Math.random().toString(36).substring(2, 9),
-                          text: text,
-                          isDone: false,
-                          timestamp: Date.now()
-                        }],
-                        isEnriching: false,
-                        statusText: undefined,
-                        isError: false
-                      } : b)
-                    }
-                  }
-                }
-
-                return {
-                  ...proj,
-                  blocks: proj.blocks.map(b => b.id === id ? {
+          if (mergeTargetId) {
+            return {
+              ...proj,
+              blocks: proj.blocks
+                .filter(b => b.id !== id)
+                .map(b => b.id === mergeTargetId ? {
+                  ...b,
+                  text: b.text + "\n\n" + text,
+                  contentType: data.contentType,
+                  category: data.category,
+                  annotation: data.annotation,
+                  confidence: data.confidence,
+                  influencedBy,
+                  isUnrelated: data.isUnrelated,
+                  sources: data.sources ?? undefined,
+                  isEnriching: false,
+                  statusText: undefined,
+                  isError: false,
+                } : b)
+            }
+          }
+          if (data.contentType === "task") {
+            const existingTaskIndex = proj.blocks.findIndex(b => b.contentType === "task" && b.id !== id)
+            if (existingTaskIndex !== -1) {
+              const existingTask = proj.blocks[existingTaskIndex]
+              const newSubTask = {
+                id: Math.random().toString(36).substring(2, 9),
+                text: text,
+                isDone: false,
+                timestamp: Date.now()
+              }
+              return {
+                ...proj,
+                blocks: proj.blocks
+                  .filter(b => b.id !== id)
+                  .map(b => b.id === existingTask.id ? {
                     ...b,
-                    contentType: data.contentType,
-                    category: data.category,
-                    annotation: data.annotation,
-                    confidence: data.confidence,
-                    influencedBy,
-                    isUnrelated: data.isUnrelated,
-                    sources: data.sources ?? undefined,
+                    subTasks: [...(b.subTasks || []), newSubTask],
                     isEnriching: false,
-                    statusText: undefined,
-                    isError: false,
+                    statusText: undefined
                   } : b)
-                }
-              })
-            })
+              }
+            } else {
+              return {
+                ...proj,
+                blocks: proj.blocks.map(b => b.id === id ? {
+                  ...b,
+                  contentType: "task",
+                  category: "Tasks",
+                  subTasks: [{
+                    id: Math.random().toString(36).substring(2, 9),
+                    text: text,
+                    isDone: false,
+                    timestamp: Date.now()
+                  }],
+                  isEnriching: false,
+                  statusText: undefined,
+                  isError: false
+                } : b)
+              }
+            }
+          }
 
-            setTimeout(() => generateGhostNote(projectId), 2500)
-        } catch (e: any) {
-          console.error(e)
-          const isNoKey = e?.message?.includes("No API key") || false
-          setProjects((current: Project[]) => current.map(proj => proj.id === projectId ? {
+          return {
             ...proj,
-            blocks: proj.blocks.map(b => b.id === id ? { ...b, isEnriching: false, isError: true, statusText: isNoKey ? "no-api-key" : undefined } : b)
-          } : proj))
-        }
-      }
+            blocks: proj.blocks.map(b => b.id === id ? {
+              ...b,
+              contentType: data.contentType,
+              category: data.category,
+              annotation: data.annotation,
+              confidence: data.confidence,
+              influencedBy,
+              isUnrelated: data.isUnrelated,
+              sources: data.sources ?? undefined,
+              isEnriching: false,
+              statusText: undefined,
+              isError: false,
+            } : b)
+          }
+        })
+      })
 
-      performEnrich()
-
-      return prevProjects.map(p => p.id === projectId ? {
-        ...p,
-        blocks: p.blocks.map(b => b.id === id ? { ...b, isEnriching: true, isError: false } : b)
-      } : p)
-    })
+      setTimeout(() => generateGhostNote(projectId), 2500)
+    } catch (e: any) {
+      console.warn(e)
+      const isNoKey = e?.message?.includes("No API key") || e?.message?.includes("Invalid or missing API key") || false
+      const errorStatus = isNoKey ? "no-api-key" : (e instanceof Error ? e.message : undefined)
+      setProjects((current: Project[]) => current.map(proj => proj.id === projectId ? {
+        ...proj,
+        blocks: proj.blocks.map(b => b.id === id ? { ...b, isEnriching: false, isError: true, statusText: errorStatus } : b)
+      } : proj))
+    }
   }, [generateGhostNote])
 
   const claimGhostNote = useCallback((id: string) => {
@@ -874,7 +866,7 @@ export default function Page() {
           onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
           onIndexToggle={() => setIsIndexOpen(!isIndexOpen)}
           onGhostPanelToggle={() => setIsGhostPanelOpen(prev => !prev)}
-          modelLabel={settings.apiKey ? currentModel.shortLabel : undefined}
+          modelLabel={isHydrated && settings.apiKey ? currentModel.shortLabel : undefined}
           showHelpTooltip={showHelpTooltip}
           onHelpTooltipDismiss={() => {
             setShowHelpTooltip(false)
@@ -882,9 +874,9 @@ export default function Page() {
           }}
         />
 
-        {!settings.apiKey && settings.provider !== "claude-cli" && (
+        {isHydrated && !settings.apiKey && settings.provider !== "claude-cli" && (
           <div className="flex items-center justify-center gap-3 px-4 py-2 bg-amber-950/80 border-b border-amber-800/60 text-amber-200 text-xs shrink-0">
-            <span className="opacity-80">⚡ AI enrichment is inactive — add an API key to classify and annotate your notes.</span>
+            <span className="opacity-80">⚡ AI enrichment requires an <strong className="text-amber-200">OpenRouter API key</strong> — use a free model (no credits needed) or add credits for GPT-4o, Claude, and more. Configure in the <strong className="text-amber-200">☰ left panel</strong>.</span>
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => { setIsSidebarOpen(true); setJumpToSettings(true) }}
@@ -898,7 +890,7 @@ export default function Page() {
                 rel="noopener noreferrer"
                 className="opacity-60 hover:opacity-90 transition-opacity underline underline-offset-2"
               >
-                Get a key ↗
+                Get a free key ↗
               </a>
             </div>
           </div>

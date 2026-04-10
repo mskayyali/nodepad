@@ -4,6 +4,47 @@ import { detectContentType } from "@/lib/detect-content-type"
 import { loadAIConfig, getBaseUrl, getProviderHeaders, getModelsForProvider } from "@/lib/ai-settings"
 import type { ContentType } from "@/lib/content-types"
 
+// ── Provider error parser ─────────────────────────────────────────────────────
+
+/** Parses an error response from any OpenAI-compatible provider into a concise
+ *  human-readable message. Handles OpenRouter-specific metadata (upstream
+ *  provider name, rate limit type) and common HTTP error codes. */
+export async function parseProviderError(response: Response): Promise<string> {
+  let errObj: { message?: string; metadata?: { provider_name?: string } } | undefined
+  try {
+    const body = await response.json()
+    errObj = body?.error
+  } catch { /* couldn't parse JSON — fall through */ }
+
+  const providerName = errObj?.metadata?.provider_name
+
+  switch (response.status) {
+    case 401:
+      return "Invalid or missing API key. Check your key in Settings."
+    case 402:
+      return "Insufficient credits. Add credits to your account or switch to a free model."
+    case 403:
+      return "Content flagged by the provider's safety filter."
+    case 404:
+      return "This model is no longer available. Switch to another model in Settings."
+    case 408:
+      return "Request timed out. Try again."
+    case 429:
+      if (providerName) {
+        return `${providerName} is rate-limiting free requests right now. Retry later or switch to a paid model.`
+      }
+      return "Too many requests. Slow down and try again."
+    case 502:
+    case 503:
+      if (providerName) {
+        return `${providerName} is temporarily unavailable. Try again or switch models.`
+      }
+      return "The AI provider is temporarily unavailable. Try again."
+    default:
+      return errObj?.message ?? `Request failed (${response.status}). Check your settings.`
+  }
+}
+
 // ── Language detection ────────────────────────────────────────────────────────
 
 const ENGLISH_STOPWORDS = new Set([
@@ -148,6 +189,71 @@ export interface EnrichResult {
   sources?: { url: string; title: string; siteName: string }[]
 }
 
+// ── Robust JSON parsing ───────────────────────────────────────────────────────
+// Models sometimes return truncated or escaped JSON. These helpers try harder
+// before giving up, falling back to regex field extraction as a last resort.
+
+function decodeJsonishString(value: string): string {
+  return value
+    .replace(/\\r/g, "\r")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\")
+    .trim()
+}
+
+function extractJsonCandidate(content: string): string | null {
+  // Prefer fenced code blocks first
+  const fenceMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/)
+  if (fenceMatch) return fenceMatch[1].trim()
+  // Fall back to outermost { ... }
+  const start = content.indexOf("{")
+  const end   = content.lastIndexOf("}")
+  if (start !== -1 && end > start) return content.slice(start, end + 1).trim()
+  return null
+}
+
+function coerceLooseEnrichResult(content: string): EnrichResult | null {
+  // Last-resort regex extraction for truncated responses
+  const contentTypeMatch = content.match(/"contentType"\s*:\s*"([^"]+)"/)
+  const categoryMatch    = content.match(/"category"\s*:\s*"([^"]+)"/)
+  const annotationMatch  = content.match(
+    /"annotation"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"(?:confidence|influencedByIndices|isUnrelated|mergeWithIndex)"|\s*$)/
+  )
+  if (!contentTypeMatch || !categoryMatch || !annotationMatch) return null
+
+  const confidenceRaw    = content.match(/"confidence"\s*:\s*(null|-?\d+(?:\.\d+)?)/)?.[1]
+  const influencedRaw    = content.match(/"influencedByIndices"\s*:\s*\[([^\]]*)\]/)?.[1]
+  const isUnrelatedRaw   = content.match(/"isUnrelated"\s*:\s*(true|false)/)?.[1]
+  const mergeRaw         = content.match(/"mergeWithIndex"\s*:\s*(null|-?\d+)/)?.[1]
+
+  const influencedByIndices = influencedRaw
+    ? influencedRaw.split(",").map(p => Number(p.trim())).filter(Number.isFinite)
+    : []
+
+  return {
+    contentType:         contentTypeMatch[1] as ContentType,
+    category:            decodeJsonishString(categoryMatch[1]),
+    annotation:          decodeJsonishString(annotationMatch[1]),
+    confidence:          confidenceRaw == null || confidenceRaw === "null" ? null : Number(confidenceRaw),
+    influencedByIndices,
+    isUnrelated:         isUnrelatedRaw === "true",
+    mergeWithIndex:      mergeRaw == null || mergeRaw === "null" ? null : Number(mergeRaw),
+  }
+}
+
+function parseEnrichResult(content: string): EnrichResult | null {
+  const candidate = extractJsonCandidate(content) ?? content.trim()
+  try {
+    return JSON.parse(candidate) as EnrichResult
+  } catch {
+    return coerceLooseEnrichResult(candidate)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function enrichBlockClient(
   text: string,
   context: EnrichContext[],
@@ -235,12 +341,18 @@ You have live web access. For this note type, include 1–2 real source citation
   const langDirective = `[RESPOND IN: ${language}]\n`
   const userMessage = `${langDirective}<note_to_enrich>${safeText}</note_to_enrich>${urlContext}${categoryContext}${forcedTypeContext}${globalContext}`
 
+  // Cap output tokens: prevents OpenRouter from using a high provider default
+  // (e.g. 16384) that exceeds low-credit/free-tier balances and triggers 402.
+  // Enrichment JSON is compact — annotation ~120 words plus fields fits in 1200.
+  const MAX_ENRICH_OUTPUT_TOKENS = 1200
+
   const baseUrl = getBaseUrl(config)
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: getProviderHeaders(config),
     body: JSON.stringify({
       model,
+      max_tokens: MAX_ENRICH_OUTPUT_TOKENS,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user",   content: userMessage },
@@ -260,26 +372,27 @@ You have live web access. For this note type, include 1–2 real source citation
   })
 
   if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`AI enrich error (${config.provider}) ${response.status}: ${err}`)
+    throw new Error(await parseProviderError(response))
   }
 
-  const data = await response.json()
-  const content = data.choices?.[0]?.message?.content
+  let data: Record<string, unknown>
+  try {
+    data = await response.json()
+  } catch {
+    throw new Error(
+      `AI enrich error (${config.provider}): response was not valid JSON. The provider may have timed out or returned a truncated response.`
+    )
+  }
+
+  const content = (data.choices as Array<{ message?: { content?: string } }>)?.[0]?.message?.content
   if (!content) throw new Error("No content in AI response")
 
-  let result: EnrichResult
-  try {
-    result = JSON.parse(content)
-  } catch {
-    const fenceMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/)
-    if (fenceMatch) {
-      result = JSON.parse(fenceMatch[1].trim())
-    } else {
-      throw new Error(
-        `AI returned invalid JSON. The model may not support structured output.\n\nRaw response: ${content.substring(0, 200)}`
-      )
-    }
+  const result = parseEnrichResult(content)
+  if (!result) {
+    const finishReason = (data.choices as Array<{ finish_reason?: string }>)?.[0]?.finish_reason
+    throw new Error(
+      `AI returned unparseable JSON.${finishReason ? ` Finish reason: ${finishReason}.` : ""} Raw: ${content.substring(0, 200)}`
+    )
   }
   if (result.confidence != null) {
     result.confidence = Math.min(100, Math.max(0, Math.round(result.confidence)))
@@ -289,7 +402,7 @@ You have live web access. For this note type, include 1–2 real source citation
   // Both OpenRouter :online and OpenAI search-preview return citations as
   // annotations on the message object — not inside the JSON content itself.
   const annotations: Array<{ type: string; url_citation?: { url: string; title?: string } }> =
-    data.choices?.[0]?.message?.annotations ?? []
+    ((data.choices as Array<{ message?: { annotations?: unknown[] } }>)?.[0]?.message?.annotations ?? []) as Array<{ type: string; url_citation?: { url: string; title?: string } }>
   const seen = new Set<string>()
   const sources = annotations
     .filter(a => a.type === "url_citation" && a.url_citation?.url)

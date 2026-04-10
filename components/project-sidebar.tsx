@@ -108,14 +108,26 @@ export function ProjectSidebar({
     setDeletingId(null)
   }
 
-  const handleSaveSettings = () => {
-    // Persist this provider's key so switching back restores it
+  const persistSettings = () => {
+    // Trim key to strip accidental whitespace/newlines from paste
+    const trimmedKey = draft.apiKey.trim()
     const providerKeys: Partial<Record<AIProvider, string>> = {
       ...(draft.providerKeys ?? {}),
-      [draft.provider]: draft.apiKey,
+      [draft.provider]: trimmedKey,
     }
-    onUpdateAISettings({ ...draft, providerKeys })
+    onUpdateAISettings({ ...draft, apiKey: trimmedKey, providerKeys })
+  }
+
+  const handleSaveSettings = () => {
+    persistSettings()
     setShowSettings(false)
+  }
+
+  // Auto-save settings when the sidebar closes or when navigating back,
+  // so key edits are never silently dropped.
+  const handleClose = () => {
+    if (showSettings) persistSettings()
+    onClose()
   }
 
   const currentPreset = getPreset(draft.provider)
@@ -137,7 +149,7 @@ export function ProjectSidebar({
           <div className="flex items-center gap-2.5">
             {showSettings ? (
               <button
-                onClick={() => setShowSettings(false)}
+                onClick={handleSaveSettings}
                 className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
@@ -154,8 +166,8 @@ export function ProjectSidebar({
               </>
             )}
           </div>
-          <button 
-            onClick={onClose}
+          <button
+            onClick={handleClose}
             className="p-1 px-1.5 hover:bg-white/5 rounded-sm transition-colors text-muted-foreground hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
