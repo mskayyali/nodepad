@@ -17,3 +17,7 @@ next-env.d.ts
 
 # Internal docs
 CLAUDE.md
+
+# Service worker files for PWA (should be generated, not committed)
+public/sw.js
+public/workbox-*.js

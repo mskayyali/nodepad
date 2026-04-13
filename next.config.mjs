@@ -1,3 +1,6 @@
+// Note: PWA support is added in a separate config file (next-pwa.config.mjs) to avoid complicating.
+import { withPWA } from './next-pwa.config.mjs'
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: {
@@ -60,4 +63,4 @@ const nextConfig = {
   },
 }
 
-export default nextConfig
+export default withPWA(nextConfig)
