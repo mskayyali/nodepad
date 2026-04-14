@@ -1,0 +1,41 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Node / build artifacts
+node_modules
+.next
+out
+dist
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# Env
+.env*.local
+.env
+
+# Editor / OS
+.DS_Store
+.vscode
+.idea
+
+# Claude / internal
+.claude
+CLAUDE.md
+
+# v0 runtime files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+
+# Local-only design system
+app/design-system
+
+# Docker / docs (not needed in image)
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.yaml
+README.md
+LICENSE

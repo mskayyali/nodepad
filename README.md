@@ -37,6 +37,22 @@ npm run dev
 
 Open [localhost:3000](http://localhost:3000).
 
+### Run with Docker
+
+Requires Docker and Docker Compose.
+
+```bash
+git clone https://github.com/mskayyali/nodepad.git
+cd nodepad
+docker compose up --build
+```
+
+Open [localhost:3000](http://localhost:3000). To run in the background use `docker compose up -d`, and `docker compose down` to stop.
+
+The container is stateless — notes and API keys live in your browser's `localStorage`, so there is nothing to mount or back up server-side. Override the host port with `HOST_PORT=8080 docker compose up` (see `.env.example`).
+
+Do not scale the `web` service beyond one replica: `/api/fetch-url` uses an in-process rate limiter that assumes a single instance.
+
 **Add your API key**: click the menu icon (top-left) → Settings → choose your provider → paste your key. The key is stored in your browser's `localStorage` and goes directly to the AI provider — it never passes through any server.
 
 **Enable web grounding** (optional): toggle "Web grounding" in Settings to let the AI cite real sources for claims, questions, and references. Supported on OpenRouter `:online` models and OpenAI search-preview models.
