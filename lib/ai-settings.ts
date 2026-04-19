@@ -12,7 +12,7 @@ export interface AIModel {
   groundingModelId?: string
 }
 
-export type AIProvider = "openrouter" | "openai" | "zai"
+export type AIProvider = "openrouter" | "openai" | "zai" | "anthropic"
 
 export interface AIProviderPreset {
   id: AIProvider
@@ -43,6 +43,16 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     baseUrl: "https://api.z.ai/api/paas/v4",
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     keyPlaceholder: "Your Z.ai API key",
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    // Native Messages API — request URLs are built as `${baseUrl}/messages`
+    // in call sites that branch on provider === "anthropic" (see ai-enrich.ts,
+    // ai-ghost.ts). Other providers append `/chat/completions` to their baseUrl.
+    baseUrl: "https://api.anthropic.com/v1",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+    keyPlaceholder: "sk-ant-...",
   },
 ]
 
@@ -143,6 +153,59 @@ export const OPENAI_MODELS: AIModel[] = [
   },
 ]
 
+// Native Anthropic models — accessed via the Messages API with forced tool_use
+// for structured output (see ai-enrich.ts and ai-ghost.ts). Web grounding is
+// intentionally not exposed: Anthropic supports a server-side web_search tool
+// but wiring it up is a separate feature.
+//
+// Tool use is incompatible with extended/adaptive thinking when tool_choice is
+// forced to a specific tool — so nodepad's Anthropic path never sends the
+// `thinking` field. Thinking defaults to off on all listed models.
+export const ANTHROPIC_MODELS: AIModel[] = [
+  {
+    id: "claude-opus-4-7",
+    label: "Claude Opus 4.7",
+    shortLabel: "Opus 4.7",
+    description: "Frontier reasoning & agentic coding, 1M context",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
+    shortLabel: "Sonnet 4.6",
+    description: "Best balance of speed and intelligence, 1M context",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-opus-4-6",
+    label: "Claude Opus 4.6",
+    shortLabel: "Opus 4.6",
+    description: "Prior Opus generation, 1M context",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-sonnet-4-5",
+    label: "Claude Sonnet 4.5",
+    shortLabel: "Sonnet 4.5",
+    description: "Prior Sonnet generation, 200K context",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-opus-4-5",
+    label: "Claude Opus 4.5",
+    shortLabel: "Opus 4.5",
+    description: "Prior Opus generation, 200K context",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-haiku-4-5",
+    label: "Claude Haiku 4.5",
+    shortLabel: "Haiku 4.5",
+    description: "Fastest, near-frontier quality, 200K context",
+    supportsGrounding: false,
+  },
+]
+
 export const ZAI_MODELS: AIModel[] = [
   {
     id: "glm-4.5",
@@ -175,8 +238,9 @@ export const ZAI_MODELS: AIModel[] = [
 ]
 
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
-  if (provider === "openai") return OPENAI_MODELS
-  if (provider === "zai")    return ZAI_MODELS
+  if (provider === "openai")    return OPENAI_MODELS
+  if (provider === "zai")       return ZAI_MODELS
+  if (provider === "anthropic") return ANTHROPIC_MODELS
   return AI_MODELS // openrouter + safe fallback for any stale localStorage value
 }
 
@@ -240,6 +304,19 @@ export function getBaseUrl(config: AIConfig): string {
 }
 
 export function getProviderHeaders(config: AIConfig): Record<string, string> {
+  // Anthropic uses a different auth scheme (x-api-key, not Bearer) and
+  // requires an explicit opt-in header for direct browser access, since
+  // nodepad calls the Messages API from localStorage-stored keys with no
+  // backend proxy in between.
+  if (config.provider === "anthropic") {
+    return {
+      "Content-Type": "application/json",
+      "x-api-key": config.apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    }
+  }
+
   const base: Record<string, string> = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${config.apiKey}`,

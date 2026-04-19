@@ -279,7 +279,13 @@ export async function enrichBlockClient(
     }
   }
 
-  const supportsJsonSchema = config.provider === "openrouter" || config.provider === "openai"
+  // Native Anthropic enforces structure via forced tool_use (see the call path
+  // below) — treat it as strict-schema capable so we don't inject the fallback
+  // schemaHint into the system prompt (tool_use already constrains the shape).
+  const supportsJsonSchema =
+    config.provider === "openrouter" ||
+    config.provider === "openai" ||
+    config.provider === "anthropic"
   // gpt-*-search-preview models have known issues with strict json_schema + web_search_options;
   // fall back to json_object mode (guaranteed valid JSON, no schema enforcement)
   const useStrictSchema = supportsJsonSchema && !webSearchOptions
@@ -347,6 +353,75 @@ You have live web access. For this note type, include 1–2 real source citation
   const MAX_ENRICH_OUTPUT_TOKENS = 1200
 
   const baseUrl = getBaseUrl(config)
+
+  // ── Native Anthropic path ───────────────────────────────────────────────
+  // Uses the Messages API with forced tool_use for structured output. Forced
+  // tool_choice is incompatible with extended/adaptive thinking, so we never
+  // send a `thinking` field — thinking defaults to off on all Claude 4.x
+  // models we expose (Opus 4.5/4.6/4.7, Sonnet 4.5/4.6, Haiku 4.5), so this
+  // gives us deterministic, low-latency enrichment that matches the schema.
+  if (config.provider === "anthropic") {
+    const response = await fetch(`${baseUrl}/messages`, {
+      method: "POST",
+      headers: getProviderHeaders(config),
+      body: JSON.stringify({
+        model,
+        max_tokens: MAX_ENRICH_OUTPUT_TOKENS,
+        // Anthropic puts system instructions in a top-level field, not in `messages`.
+        system: systemPrompt,
+        messages: [
+          { role: "user", content: userMessage },
+        ],
+        temperature: 0.1,
+        // Force the model to produce a single structured call to our synthetic
+        // tool — its `input` object will conform to JSON_SCHEMA.schema.
+        tools: [
+          {
+            name: JSON_SCHEMA.name,
+            description: "Emit the enrichment result for the note.",
+            input_schema: JSON_SCHEMA.schema,
+          },
+        ],
+        tool_choice: {
+          type: "tool",
+          name: JSON_SCHEMA.name,
+          disable_parallel_tool_use: true,
+        },
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(await parseProviderError(response))
+    }
+
+    let data: {
+      content?: Array<{ type: string; input?: unknown; text?: string }>
+      stop_reason?: string
+    }
+    try {
+      data = await response.json()
+    } catch {
+      throw new Error(
+        `AI enrich error (anthropic): response was not valid JSON. The provider may have timed out or returned a truncated response.`
+      )
+    }
+
+    const toolUse = data.content?.find(b => b.type === "tool_use")
+    if (!toolUse || !toolUse.input || typeof toolUse.input !== "object") {
+      const preview = JSON.stringify(data).slice(0, 300)
+      throw new Error(
+        `Anthropic did not return a tool_use block.${data.stop_reason ? ` stop_reason: ${data.stop_reason}.` : ""} Raw: ${preview}`
+      )
+    }
+
+    const result = toolUse.input as EnrichResult
+    if (result.confidence != null) {
+      result.confidence = Math.min(100, Math.max(0, Math.round(result.confidence)))
+    }
+    return result
+  }
+
+  // ── OpenAI-compatible path (openrouter / openai / zai) ──────────────────
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: getProviderHeaders(config),

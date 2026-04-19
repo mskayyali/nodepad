@@ -84,6 +84,18 @@ GLM models from Zhipu AI. Get a key at [z.ai](https://z.ai/manage-apikey/apikey-
 | `glm-5` | Z.ai flagship model. |
 | `glm-5-turbo` | Fast, community-tested. |
 
+### Anthropic *(direct)*
+Use your Anthropic API key directly against the native Messages API. Get a key at [console.anthropic.com](https://console.anthropic.com/settings/keys). Structured output is enforced via forced tool use, so schema fidelity is as strong as OpenAI's `json_schema` mode. Web grounding is not supported on this path.
+
+| Model | Notes |
+|---|---|
+| `claude-opus-4-7` | Frontier reasoning & agentic coding, 1M context. |
+| `claude-sonnet-4-6` | Best balance of speed and intelligence, 1M context. |
+| `claude-opus-4-6` | Prior Opus generation, 1M context. |
+| `claude-sonnet-4-5` | Prior Sonnet generation, 200K context. |
+| `claude-opus-4-5` | Prior Opus generation, 200K context. |
+| `claude-haiku-4-5` | Fastest, near-frontier quality, 200K context. |
+
 ---
 
 ## Keyboard shortcuts
