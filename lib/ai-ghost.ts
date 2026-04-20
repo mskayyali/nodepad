@@ -56,6 +56,70 @@ Return ONLY valid JSON:
   const MAX_GHOST_OUTPUT_TOKENS = 220
 
   const baseUrl = getBaseUrl(config)
+
+  // ── Native Anthropic path ───────────────────────────────────────────────
+  // Same forced-tool_use trick as ai-enrich.ts — guarantees valid JSON matching
+  // the {text, category} shape without any fragile regex fallback.
+  if (config.provider === "anthropic") {
+    const GHOST_TOOL = {
+      name: "emergent_thesis",
+      description: "Emit the emergent thesis for the canvas.",
+      input_schema: {
+        type: "object",
+        properties: {
+          text:     { type: "string", description: "A 15–25 word bridge thesis or question" },
+          category: { type: "string", description: "One-word category naming the bridge topic" },
+        },
+        required: ["text", "category"],
+        additionalProperties: false,
+      },
+    }
+
+    const response = await fetch(`${baseUrl}/messages`, {
+      method: "POST",
+      headers: getProviderHeaders(config),
+      body: JSON.stringify({
+        model,
+        max_tokens: MAX_GHOST_OUTPUT_TOKENS,
+        // Ghost has no separate system prompt — the whole thing is the user turn.
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+        tools: [GHOST_TOOL],
+        tool_choice: {
+          type: "tool",
+          name: GHOST_TOOL.name,
+          disable_parallel_tool_use: true,
+        },
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(await parseProviderError(response))
+    }
+
+    let data: {
+      content?: Array<{ type: string; input?: unknown; text?: string }>
+      stop_reason?: string
+    }
+    try {
+      data = await response.json()
+    } catch {
+      throw new Error(
+        `AI ghost error (anthropic): response was not valid JSON. The provider may have timed out or returned a truncated response.`
+      )
+    }
+
+    const toolUse = data.content?.find(b => b.type === "tool_use")
+    if (!toolUse || !toolUse.input || typeof toolUse.input !== "object") {
+      const preview = JSON.stringify(data).slice(0, 300)
+      throw new Error(
+        `Anthropic did not return a tool_use block.${data.stop_reason ? ` stop_reason: ${data.stop_reason}.` : ""} Raw: ${preview}`
+      )
+    }
+    return toolUse.input as GhostResult
+  }
+
+  // ── OpenAI-compatible path (openrouter / openai / zai) ──────────────────
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: getProviderHeaders(config),
