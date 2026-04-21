@@ -84,6 +84,17 @@ GLM models from Zhipu AI. Get a key at [z.ai](https://z.ai/manage-apikey/apikey-
 | `glm-5` | Z.ai flagship model. |
 | `glm-5-turbo` | Fast, community-tested. |
 
+### Groq
+Ultra-fast inference on open-source models via Groq's LPU hardware. Get a key at [console.groq.com](https://console.groq.com/keys).
+
+| Model | Notes |
+|---|---|
+| `llama-3.3-70b-versatile` | Strong general-purpose, fast inference. |
+| `llama-3.1-8b-instant` | Ultra-fast, lightweight. |
+| `gemma2-9b-it` | Google Gemma 2, good structured output. |
+| `mixtral-8x7b-32768` | Mistral MoE, 32K context. |
+| `meta-llama/llama-4-scout-17b-16e-instruct` | Latest Llama 4 Scout. |
+
 ---
 
 ## Keyboard shortcuts

@@ -12,7 +12,7 @@ export interface AIModel {
   groundingModelId?: string
 }
 
-export type AIProvider = "openrouter" | "openai" | "zai"
+export type AIProvider = "openrouter" | "openai" | "zai" | "groq"
 
 export interface AIProviderPreset {
   id: AIProvider
@@ -43,6 +43,13 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     baseUrl: "https://api.z.ai/api/paas/v4",
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     keyPlaceholder: "Your Z.ai API key",
+  },
+  {
+    id: "groq",
+    label: "Groq",
+    baseUrl: "https://api.groq.com/openai/v1",
+    keyUrl: "https://console.groq.com/keys",
+    keyPlaceholder: "gsk_...",
   },
 ]
 
@@ -174,9 +181,48 @@ export const ZAI_MODELS: AIModel[] = [
   },
 ]
 
+export const GROQ_MODELS: AIModel[] = [
+  {
+    id: "llama-3.3-70b-versatile",
+    label: "Llama 3.3 70B",
+    shortLabel: "Llama 70B",
+    description: "Strong general-purpose, fast inference",
+    supportsGrounding: false,
+  },
+  {
+    id: "llama-3.1-8b-instant",
+    label: "Llama 3.1 8B Instant",
+    shortLabel: "Llama 8B",
+    description: "Ultra-fast, lightweight",
+    supportsGrounding: false,
+  },
+  {
+    id: "gemma2-9b-it",
+    label: "Gemma 2 9B",
+    shortLabel: "Gemma 2",
+    description: "Google Gemma 2, good structured output",
+    supportsGrounding: false,
+  },
+  {
+    id: "mixtral-8x7b-32768",
+    label: "Mixtral 8x7B",
+    shortLabel: "Mixtral",
+    description: "Mistral MoE, 32K context",
+    supportsGrounding: false,
+  },
+  {
+    id: "meta-llama/llama-4-scout-17b-16e-instruct",
+    label: "Llama 4 Scout 17B",
+    shortLabel: "Llama 4",
+    description: "Latest Llama 4 Scout, multimodal",
+    supportsGrounding: false,
+  },
+]
+
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
   if (provider === "openai") return OPENAI_MODELS
   if (provider === "zai")    return ZAI_MODELS
+  if (provider === "groq")   return GROQ_MODELS
   return AI_MODELS // openrouter + safe fallback for any stale localStorage value
 }
 
