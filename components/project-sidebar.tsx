@@ -349,37 +349,51 @@ export function ProjectSidebar({
                   </div>
                 </div>
 
-                {/* API Key */}
-                <div className="flex flex-col gap-2">
-                  <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                    API Key
-                  </label>
-                  <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
-                    <Key className="h-3 w-3 shrink-0 text-muted-foreground" />
-                    <input
-                      type="text"
-                      value={draft.apiKey}
-                      onChange={e => setDraft(d => ({ ...d, apiKey: e.target.value }))}
-                      placeholder={currentPreset.keyPlaceholder || "Your API key"}
-                      className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
-                      style={showKey ? undefined : { WebkitTextSecurity: "disc" } as never}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                    <button onClick={() => setShowKey(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors">
-                      {showKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                    </button>
+                {/* API Key / Local Instructions */}
+                {draft.provider === "local" ? (
+                  <div className="flex flex-col gap-2 mt-1 p-2.5 bg-primary/10 border border-primary/20 rounded-md">
+                    <p className="font-mono text-[10px] font-bold text-primary flex items-center gap-1.5">
+                      <Globe className="h-3 w-3" /> Local Mode Active
+                    </p>
+                    <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
+                      No API key needed. Open your terminal and run:
+                    </p>
+                    <code className="block mt-0.5 px-2 py-1.5 bg-black/40 border border-white/10 rounded font-mono text-[10px] text-foreground select-all">
+                      ollama run {draft.modelId || "llama3"}
+                    </code>
                   </div>
-                  <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
-                    Stored locally. Never sent to a server.{" "}
-                    {currentPreset.keyUrl && (
-                      <a href={currentPreset.keyUrl} target="_blank" rel="noopener noreferrer"
-                        className="text-primary underline hover:brightness-125 transition-all">
-                        Get a key →
-                      </a>
-                    )}
-                  </p>
-                </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                      API Key
+                    </label>
+                    <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                      <Key className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <input
+                        type="text"
+                        value={draft.apiKey}
+                        onChange={e => setDraft(d => ({ ...d, apiKey: e.target.value }))}
+                        placeholder={currentPreset.keyPlaceholder || "Your API key"}
+                        className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                        style={showKey ? undefined : { WebkitTextSecurity: "disc" } as never}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <button onClick={() => setShowKey(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors">
+                        {showKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                      </button>
+                    </div>
+                    <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
+                      Stored locally. Never sent to a server.{" "}
+                      {currentPreset.keyUrl && (
+                        <a href={currentPreset.keyUrl} target="_blank" rel="noopener noreferrer"
+                          className="text-primary underline hover:brightness-125 transition-all">
+                          Get a key →
+                        </a>
+                      )}
+                    </p>
+                  </div>
+                )}
 
                 {/* Custom Base URL */}
                 <div className="flex flex-col gap-2">
@@ -499,20 +513,25 @@ export function ProjectSidebar({
                 )}
 
                 {/* API Status */}
-                <div className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${
-                  draft.apiKey
-                    ? "bg-primary/10 border border-primary/20 text-primary"
-                    : "bg-white/5 border border-white/5 text-muted-foreground"
-                }`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${draft.apiKey ? "bg-primary animate-pulse" : "bg-white/30"}`} />
-                  {draft.apiKey ? `${currentPreset.label} — API key configured` : "No API key — AI disabled"}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Footer */}
+            <div className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${
+              draft.apiKey || draft.provider === "local"
+                ? "bg-primary/10 border border-primary/20 text-primary"
+                : "bg-white/5 border border-white/5 text-muted-foreground"
+            }`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${draft.apiKey || draft.provider === "local" ? "bg-primary animate-pulse" : "bg-white/30"}`} />
+              {draft.provider === "local" 
+                ? "Local AI ready" 
+                : draft.apiKey 
+                  ? `${currentPreset.label} — API key configured` 
+                  : "No API key — AI disabled"}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+            
+    {/* Footer */}
+    
         <div className="p-3 border-t border-white/5 bg-black/10 shrink-0">
           {showSettings ? (
             <div className="flex flex-col gap-1.5">

@@ -866,7 +866,7 @@ export default function Page() {
           onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
           onIndexToggle={() => setIsIndexOpen(!isIndexOpen)}
           onGhostPanelToggle={() => setIsGhostPanelOpen(prev => !prev)}
-          modelLabel={isHydrated && settings.apiKey ? currentModel.shortLabel : undefined}
+          modelLabel={isHydrated && (settings.apiKey || settings.provider === "local") ? currentModel.shortLabel : undefined}
           showHelpTooltip={showHelpTooltip}
           onHelpTooltipDismiss={() => {
             setShowHelpTooltip(false)
@@ -874,7 +874,7 @@ export default function Page() {
           }}
         />
 
-        {isHydrated && !settings.apiKey && (
+       {isHydrated && !settings.apiKey && settings.provider !== "local" && (
           <div className="flex items-center justify-center gap-3 px-4 py-2 bg-amber-950/80 border-b border-amber-800/60 text-amber-200 text-xs shrink-0">
             <span className="opacity-80">⚡ AI enrichment requires an <strong className="text-amber-200">OpenRouter API key</strong> — use a free model (no credits needed) or add credits for GPT-4o, Claude, and more. Configure in the <strong className="text-amber-200">☰ left panel</strong>.</span>
             <div className="flex items-center gap-2 shrink-0">

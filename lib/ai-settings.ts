@@ -12,7 +12,7 @@ export interface AIModel {
   groundingModelId?: string
 }
 
-export type AIProvider = "openrouter" | "openai" | "zai"
+export type AIProvider = "openrouter" | "openai" | "zai" | "local"
 
 export interface AIProviderPreset {
   id: AIProvider
@@ -43,6 +43,13 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     baseUrl: "https://api.z.ai/api/paas/v4",
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     keyPlaceholder: "Your Z.ai API key",
+  },
+  {
+    id: "local",
+    label: "Local (Ollama)",
+    baseUrl: "http://localhost:11434/v1", 
+    keyUrl: "https://ollama.com",
+    keyPlaceholder: "Leave blank for Local/Ollama",
   },
 ]
 
@@ -172,11 +179,57 @@ export const ZAI_MODELS: AIModel[] = [
     description: "Fast, capable, community tested",
     supportsGrounding: false,
   },
+  
+]
+export const LOCAL_MODELS: AIModel[] = [
+  {
+    id: "llama3",
+    label: "Llama 3 (Local)",
+    shortLabel: "Llama3",
+    description: "Running completely offline via Ollama",
+    supportsGrounding: false,
+  },
+  {
+    id: "mistral",
+    label: "Mistral 7B (Local)",
+    shortLabel: "Mistral",
+    description: "A fast, highly capable all-rounder model",
+    supportsGrounding: false,
+  },
+  {
+    id: "qwen2.5",
+    label: "Qwen 2.5 (Local)",
+    shortLabel: "Qwen2.5",
+    description: "Top-tier open model for coding and logic",
+    supportsGrounding: false,
+  },
+  {
+    id: "gemma2",
+    label: "Gemma 2 9B (Local)",
+    shortLabel: "Gemma2",
+    description: "Google's powerful open-weights model",
+    supportsGrounding: false,
+  },
+  {
+    id: "phi3",
+    label: "Phi-3 Mini (Local)",
+    shortLabel: "Phi-3",
+    description: "Microsoft's lightweight model—blazing fast on any hardware",
+    supportsGrounding: false,
+  },
+  {
+    id: "deepseek-coder",
+    label: "DeepSeek Coder (Local)",
+    shortLabel: "DeepSeek",
+    description: "Highly optimized specifically for programming and code tasks",
+    supportsGrounding: false,
+  }
 ]
 
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
   if (provider === "openai") return OPENAI_MODELS
   if (provider === "zai")    return ZAI_MODELS
+  if (provider === "local")  return LOCAL_MODELS  
   return AI_MODELS // openrouter + safe fallback for any stale localStorage value
 }
 
