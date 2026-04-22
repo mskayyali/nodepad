@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useState, useRef, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
   Settings,
@@ -18,37 +18,40 @@ import {
   EyeOff,
   Save,
   FolderInput,
-} from "lucide-react"
+  Search,
+} from "lucide-react";
 import {
   AI_PROVIDER_PRESETS,
   getModelsForProvider,
   getPreset,
+  getHardcodedModelsForProvider,
   type AISettings,
   type AIProvider,
-} from "@/lib/ai-settings"
+  type AIModel,
+} from "@/lib/ai-settings";
 
 interface Project {
-  id: string
-  name: string
-  blocks: any[]
-  collapsedIds: string[]
+  id: string;
+  name: string;
+  blocks: any[];
+  collapsedIds: string[];
 }
 
 interface ProjectSidebarProps {
-  isOpen: boolean
-  onClose: () => void
-  projects: Project[]
-  activeProjectId: string
-  onSelectProject: (id: string) => void
-  onCreateProject: () => void
-  onImportProject: () => void
-  onRenameProject: (id: string, newName: string) => void
-  onDeleteProject: (id: string) => void
-  openToSettings?: boolean
-  onSettingsOpened?: () => void
+  isOpen: boolean;
+  onClose: () => void;
+  projects: Project[];
+  activeProjectId: string;
+  onSelectProject: (id: string) => void;
+  onCreateProject: () => void;
+  onImportProject: () => void;
+  onRenameProject: (id: string, newName: string) => void;
+  onDeleteProject: (id: string) => void;
+  openToSettings?: boolean;
+  onSettingsOpened?: () => void;
   // AI Settings
-  aiSettings: AISettings
-  onUpdateAISettings: (patch: Partial<AISettings>) => void
+  aiSettings: AISettings;
+  onUpdateAISettings: (patch: Partial<AISettings>) => void;
 }
 
 export function ProjectSidebar({
@@ -66,79 +69,112 @@ export function ProjectSidebar({
   openToSettings,
   onSettingsOpened,
 }: ProjectSidebarProps) {
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editName, setEditName] = useState("")
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
-  const [showKey, setShowKey] = useState(false)
-  const [modelOpen, setModelOpen] = useState(false)
-  const [providerOpen, setProviderOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+  const [modelOpen, setModelOpen] = useState(false);
+  const [modelSearch, setModelSearch] = useState("");
+  const [providerOpen, setProviderOpen] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider>(
+    aiSettings.provider,
+  );
   // local draft for settings (only save on "Save")
-  const [draft, setDraft] = useState<AISettings>(aiSettings)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [draft, setDraft] = useState<AISettings>(aiSettings);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (editingId && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
+      inputRef.current.focus();
+      inputRef.current.select();
     }
-  }, [editingId])
+  }, [editingId]);
 
   // Sync draft when panel opens
   useEffect(() => {
-    if (showSettings) setDraft(aiSettings)
-  }, [showSettings])
+    if (showSettings) setDraft(aiSettings);
+  }, [showSettings]);
 
   // Jump straight to settings when requested externally
   useEffect(() => {
     if (openToSettings) {
-      setShowSettings(true)
-      onSettingsOpened?.()
+      setShowSettings(true);
+      onSettingsOpened?.();
     }
-  }, [openToSettings])
+  }, [openToSettings]);
 
   const handleRename = (id: string) => {
-    if (editName.trim()) onRenameProject(id, editName.trim())
-    setEditingId(null)
-  }
+    if (editName.trim()) onRenameProject(id, editName.trim());
+    setEditingId(null);
+  };
 
   const handleDelete = (id: string) => {
-    onDeleteProject(id)
-    setDeletingId(null)
-  }
+    onDeleteProject(id);
+    setDeletingId(null);
+  };
 
   const persistSettings = () => {
     // Trim key to strip accidental whitespace/newlines from paste
-    const trimmedKey = draft.apiKey.trim()
+    const trimmedKey = draft.apiKey.trim();
     const providerKeys: Partial<Record<AIProvider, string>> = {
       ...(draft.providerKeys ?? {}),
       [draft.provider]: trimmedKey,
-    }
-    onUpdateAISettings({ ...draft, apiKey: trimmedKey, providerKeys })
-  }
+    };
+    onUpdateAISettings({ ...draft, apiKey: trimmedKey, providerKeys });
+  };
 
   const handleSaveSettings = () => {
-    persistSettings()
-    setShowSettings(false)
-  }
+    persistSettings();
+    setShowSettings(false);
+  };
 
   // Auto-save settings when the sidebar closes or when navigating back,
   // so key edits are never silently dropped.
   const handleClose = () => {
-    if (showSettings) persistSettings()
-    onClose()
-  }
+    if (showSettings) persistSettings();
+    onClose();
+  };
 
-  const currentPreset = getPreset(draft.provider)
-  const models = getModelsForProvider(draft.provider)
-  const selectedModel = models.find(m => m.id === draft.modelId) || models[0] || undefined
+  const currentPreset = getPreset(draft.provider);
+  const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const loadModels = async () => {
+      // Use draft.provider and draft.apiKey to load models dynamically
+      const resolved = await getModelsForProvider(draft.provider, draft.apiKey);
+      console.log("Resolved models from provider", draft.provider, resolved);
+      if (active) {
+        setAvailableModels(resolved);
+      }
+    };
+    loadModels();
+    return () => {
+      active = false;
+    };
+  }, [draft.provider, draft.apiKey]);
+
+  const models =
+    availableModels.length > 0
+      ? availableModels
+      : getHardcodedModelsForProvider(draft.provider);
+
+  const filteredModels = models.filter(
+    (m) =>
+      m.label.toLowerCase().includes(modelSearch.toLowerCase()) ||
+      m.id.toLowerCase().includes(modelSearch.toLowerCase()),
+  );
+
+  const selectedModel =
+    models.find((m) => m.id === draft.modelId) || models[0] || undefined;
 
   return (
     <div
-      style={{ 
+      style={{
         width: isOpen ? 240 : 0,
         opacity: isOpen ? 1 : 0,
-        visibility: isOpen ? "visible" : "hidden"
+        visibility: isOpen ? "visible" : "hidden",
       }}
       className="relative z-50 transition-all duration-200 ease-in-out overflow-hidden border-r border-border bg-black/20 backdrop-blur-3xl flex flex-col h-full"
     >
@@ -152,7 +188,9 @@ export function ProjectSidebar({
                 className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                <span className="font-mono text-xs font-bold uppercase tracking-tight">Settings</span>
+                <span className="font-mono text-xs font-bold uppercase tracking-tight">
+                  Settings
+                </span>
               </button>
             ) : (
               <>
@@ -186,11 +224,11 @@ export function ProjectSidebar({
                 className="absolute inset-0 overflow-y-auto px-2 py-2 space-y-0.5 custom-scrollbar"
               >
                 {projects.map((project) => (
-                  <div 
+                  <div
                     key={project.id}
                     className={`group relative rounded-sm transition-all duration-150 ${
-                      activeProjectId === project.id 
-                        ? "bg-primary/10 shadow-[inset_0_1px_0px_rgba(255,255,255,0.05)]" 
+                      activeProjectId === project.id
+                        ? "bg-primary/10 shadow-[inset_0_1px_0px_rgba(255,255,255,0.05)]"
                         : "hover:bg-white/5"
                     }`}
                   >
@@ -205,21 +243,26 @@ export function ProjectSidebar({
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter") handleRename(project.id)
-                              if (e.key === "Escape") setEditingId(null)
+                              if (e.key === "Enter") handleRename(project.id);
+                              if (e.key === "Escape") setEditingId(null);
                             }}
                             onBlur={() => handleRename(project.id)}
                             className="bg-transparent font-mono text-xs font-bold text-foreground focus:outline-none w-full border-b border-primary/50 py-0"
                           />
                         ) : (
-                          <span className={`font-mono text-[12px] font-bold truncate ${
-                            activeProjectId === project.id ? "text-primary" : "text-foreground/80 group-hover:text-foreground"
-                          }`}>
+                          <span
+                            className={`font-mono text-[12px] font-bold truncate ${
+                              activeProjectId === project.id
+                                ? "text-primary"
+                                : "text-foreground/80 group-hover:text-foreground"
+                            }`}
+                          >
                             {project.name}
                           </span>
                         )}
                         <span className="font-mono text-[8px] text-muted-foreground uppercase tracking-tighter font-bold">
-                          {project.blocks.length} {project.blocks.length === 1 ? 'node' : 'nodes'}
+                          {project.blocks.length}{" "}
+                          {project.blocks.length === 1 ? "node" : "nodes"}
                         </span>
                       </button>
 
@@ -228,9 +271,9 @@ export function ProjectSidebar({
                           <>
                             <button
                               onClick={(e) => {
-                                e.stopPropagation()
-                                setEditName(project.name)
-                                setEditingId(project.id)
+                                e.stopPropagation();
+                                setEditName(project.name);
+                                setEditingId(project.id);
                               }}
                               className="p-1 hover:bg-white/10 rounded-sm text-muted-foreground hover:text-primary transition-colors"
                             >
@@ -239,8 +282,8 @@ export function ProjectSidebar({
                             {projects.length > 1 && (
                               <button
                                 onClick={(e) => {
-                                  e.stopPropagation()
-                                  setDeletingId(project.id)
+                                  e.stopPropagation();
+                                  setDeletingId(project.id);
                                 }}
                                 className="p-1 hover:bg-destructive/20 rounded-sm text-muted-foreground hover:text-destructive transition-colors"
                               >
@@ -266,13 +309,13 @@ export function ProjectSidebar({
                             Delete Space?
                           </span>
                           <div className="flex items-center gap-1">
-                            <button 
+                            <button
                               onClick={() => handleDelete(project.id)}
                               className="p-1 bg-white/20 hover:bg-white/30 rounded-full text-white transition-colors"
                             >
                               <Check className="h-3 w-3" />
                             </button>
-                            <button 
+                            <button
                               onClick={() => setDeletingId(null)}
                               className="p-1 bg-black/30 hover:bg-black/40 rounded-full text-white transition-colors"
                             >
@@ -301,11 +344,15 @@ export function ProjectSidebar({
                   </label>
                   <div className="relative">
                     <button
-                      onClick={() => setProviderOpen(v => !v)}
+                      onClick={() => setProviderOpen((v) => !v)}
                       className="flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-left hover:bg-white/[0.07] focus:outline-none transition-colors"
                     >
-                      <span className="font-mono text-[11px] font-bold text-foreground">{currentPreset.label}</span>
-                      <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${providerOpen ? "rotate-180" : ""}`} />
+                      <span className="font-mono text-[11px] font-bold text-foreground">
+                        {currentPreset.label}
+                      </span>
+                      <ChevronDown
+                        className={`h-3 w-3 text-muted-foreground transition-transform ${providerOpen ? "rotate-180" : ""}`}
+                      />
                     </button>
                     <AnimatePresence>
                       {providerOpen && (
@@ -316,12 +363,14 @@ export function ProjectSidebar({
                           transition={{ duration: 0.1 }}
                           className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-xl"
                         >
-                          {AI_PROVIDER_PRESETS.map(preset => (
+                          {AI_PROVIDER_PRESETS.map((preset) => (
                             <button
                               key={preset.id}
                               onClick={() => {
-                                const newModels = getModelsForProvider(preset.id)
-                                setDraft(d => ({
+                                const newModels = getHardcodedModelsForProvider(
+                                  preset.id,
+                                );
+                                setDraft((d) => ({
                                   ...d,
                                   provider: preset.id,
                                   modelId: newModels[0]?.id ?? d.modelId,
@@ -330,17 +379,26 @@ export function ProjectSidebar({
                                   // Restore the saved key for this provider if one exists,
                                   // otherwise clear so the user knows to enter a new one.
                                   apiKey: d.providerKeys?.[preset.id] ?? "",
-                                }))
-                                setProviderOpen(false)
+                                }));
+                                setProviderOpen(false);
+                                setSelectedProvider(preset.id);
                               }}
                               className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
                             >
-                              <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                                draft.provider === preset.id ? "border-primary bg-primary/20" : "border-white/10"
-                              }`}>
-                                {draft.provider === preset.id && <Check className="h-2.5 w-2.5 text-primary" />}
+                              <div
+                                className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                                  draft.provider === preset.id
+                                    ? "border-primary bg-primary/20"
+                                    : "border-white/10"
+                                }`}
+                              >
+                                {draft.provider === preset.id && (
+                                  <Check className="h-2.5 w-2.5 text-primary" />
+                                )}
                               </div>
-                              <span className="font-mono text-[10px] font-bold text-foreground">{preset.label}</span>
+                              <span className="font-mono text-[10px] font-bold text-foreground">
+                                {preset.label}
+                              </span>
                             </button>
                           ))}
                         </motion.div>
@@ -359,22 +417,41 @@ export function ProjectSidebar({
                     <input
                       type="text"
                       value={draft.apiKey}
-                      onChange={e => setDraft(d => ({ ...d, apiKey: e.target.value }))}
-                      placeholder={currentPreset.keyPlaceholder || "Your API key"}
+                      onChange={(e) =>
+                        setDraft((d) => ({ ...d, apiKey: e.target.value }))
+                      }
+                      placeholder={
+                        currentPreset.keyPlaceholder || "Your API key"
+                      }
                       className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
-                      style={showKey ? undefined : { WebkitTextSecurity: "disc" } as never}
+                      style={
+                        showKey
+                          ? undefined
+                          : ({ WebkitTextSecurity: "disc" } as never)
+                      }
                       autoComplete="off"
                       spellCheck={false}
                     />
-                    <button onClick={() => setShowKey(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors">
-                      {showKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    <button
+                      onClick={() => setShowKey((v) => !v)}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showKey ? (
+                        <EyeOff className="h-3 w-3" />
+                      ) : (
+                        <Eye className="h-3 w-3" />
+                      )}
                     </button>
                   </div>
                   <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
                     Stored locally. Never sent to a server.{" "}
                     {currentPreset.keyUrl && (
-                      <a href={currentPreset.keyUrl} target="_blank" rel="noopener noreferrer"
-                        className="text-primary underline hover:brightness-125 transition-all">
+                      <a
+                        href={currentPreset.keyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline hover:brightness-125 transition-all"
+                      >
                         Get a key →
                       </a>
                     )}
@@ -390,7 +467,12 @@ export function ProjectSidebar({
                     <input
                       type="text"
                       value={draft.customBaseUrl ?? ""}
-                      onChange={e => setDraft(d => ({ ...d, customBaseUrl: e.target.value }))}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          customBaseUrl: e.target.value,
+                        }))
+                      }
                       placeholder="Optional — for local/self-hosted endpoints"
                       className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
                       autoComplete="off"
@@ -398,7 +480,8 @@ export function ProjectSidebar({
                     />
                   </div>
                   <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
-                    Override the provider URL. Useful for Ollama, LM Studio, vLLM, or other OpenAI-compatible endpoints.
+                    Override the provider URL. Useful for Ollama, LM Studio,
+                    vLLM, or other OpenAI-compatible endpoints.
                   </p>
                 </div>
 
@@ -412,7 +495,9 @@ export function ProjectSidebar({
                       <input
                         type="text"
                         value={draft.modelId}
-                        onChange={e => setDraft(d => ({ ...d, modelId: e.target.value }))}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, modelId: e.target.value }))
+                        }
                         placeholder="e.g. gpt-4o, claude-3-opus-20240229"
                         className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
                         autoComplete="off"
@@ -422,14 +507,20 @@ export function ProjectSidebar({
                   ) : (
                     <div className="relative">
                       <button
-                        onClick={() => setModelOpen(v => !v)}
+                        onClick={() => {
+                          setModelOpen((v) => !v);
+                          if (!modelOpen) setModelSearch("");
+                        }}
                         className="flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 text-left hover:bg-white/[0.07] focus:outline-none transition-colors"
                       >
                         <div>
-                          <div className="font-mono text-[11px] font-bold text-foreground">{selectedModel?.label ?? draft.modelId}</div>
-                          <div className="font-mono text-[9px] text-muted-foreground mt-0.5">{selectedModel?.description ?? "Custom model ID"}</div>
+                          <div className="font-mono text-[11px] font-bold text-foreground">
+                            {selectedModel?.label ?? draft.modelId}
+                          </div>
                         </div>
-                        <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${modelOpen ? "rotate-180" : ""}`} />
+                        <ChevronDown
+                          className={`h-3 w-3 text-muted-foreground transition-transform ${modelOpen ? "rotate-180" : ""}`}
+                        />
                       </button>
                       <AnimatePresence>
                         {modelOpen && (
@@ -438,29 +529,69 @@ export function ProjectSidebar({
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -4 }}
                             transition={{ duration: 0.1 }}
-                            className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-xl"
+                            className="absolute top-full left-0 right-0 z-20 mt-1 rounded-md border border-white/10 bg-[#0d0d10] shadow-xl overflow-hidden flex flex-col"
                           >
-                            {models.map(model => (
-                              <button
-                                key={model.id}
-                                onClick={() => {
-                                  setDraft(d => ({ ...d, modelId: model.id, webGrounding: model.supportsGrounding ? d.webGrounding : false }))
-                                  setModelOpen(false)
-                                }}
-                                className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
-                              >
-                                <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                                  draft.modelId === model.id ? "border-primary bg-primary/20" : "border-white/10"
-                                }`}>
-                                  {draft.modelId === model.id && <Check className="h-2.5 w-2.5 text-primary" />}
+                            {/* Model Search Bar */}
+                            <div className="flex items-center gap-2 px-2.5 py-2 border-b border-white/10 bg-white/5">
+                              <Search className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <input
+                                autoFocus
+                                type="text"
+                                value={modelSearch}
+                                onChange={(e) => setModelSearch(e.target.value)}
+                                placeholder="Search models..."
+                                className="flex-1 bg-transparent font-mono text-[10px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                              />
+                            </div>
+
+                            <div className="max-h-[240px] overflow-y-auto custom-scrollbar">
+                              {filteredModels.length === 0 ? (
+                                <div className="px-2.5 py-4 text-center">
+                                  <span className="font-mono text-[10px] text-muted-foreground">
+                                    No models found
+                                  </span>
                                 </div>
-                                <div>
-                                  <div className="font-mono text-[10px] font-bold text-foreground">{model.label}</div>
-                                  <div className="font-mono text-[9px] text-muted-foreground">{model.description}</div>
-                                </div>
-                                {model.supportsGrounding && (draft.provider === "openrouter" || draft.provider === "openai") && <Globe className="ml-auto h-3 w-3 shrink-0 text-primary/50" />}
-                              </button>
-                            ))}
+                              ) : (
+                                filteredModels.map((model) => (
+                                  <button
+                                    key={model.id}
+                                    onClick={() => {
+                                      setDraft((d) => ({
+                                        ...d,
+                                        modelId: model.id,
+                                        webGrounding: model.supportsGrounding
+                                          ? d.webGrounding
+                                          : false,
+                                      }));
+                                      setModelOpen(false);
+                                    }}
+                                    className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
+                                  >
+                                    <div
+                                      className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                                        draft.modelId === model.id
+                                          ? "border-primary bg-primary/20"
+                                          : "border-white/10"
+                                      }`}
+                                    >
+                                      {draft.modelId === model.id && (
+                                        <Check className="h-2.5 w-2.5 text-primary" />
+                                      )}
+                                    </div>
+                                    <div className="flex-1 overflow-hidden">
+                                      <div className="font-mono text-[10px] font-bold text-foreground truncate">
+                                        {model.label}
+                                      </div>
+                                    </div>
+                                    {model.supportsGrounding &&
+                                      (draft.provider === "openrouter" ||
+                                        draft.provider === "openai") && (
+                                        <Globe className="ml-auto h-3 w-3 shrink-0 text-primary/50" />
+                                      )}
+                                  </button>
+                                ))
+                              )}
+                            </div>
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -469,43 +600,66 @@ export function ProjectSidebar({
                 </div>
 
                 {/* Web Grounding (OpenRouter + OpenAI) */}
-                {(draft.provider === "openrouter" || draft.provider === "openai") && selectedModel && (
-                  <div className="flex items-start justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2.5">
-                    <div className="flex items-start gap-2">
-                      <Globe className="h-3.5 w-3.5 mt-0.5 text-primary/60 shrink-0" />
-                      <div>
-                        <div className="font-mono text-[11px] font-bold text-foreground">Web Grounding</div>
-                        <div className="font-mono text-[9px] text-muted-foreground mt-0.5 leading-relaxed">
-                          {selectedModel.supportsGrounding
-                            ? draft.provider === "openai"
-                              ? `Uses ${selectedModel.groundingModelId ?? "search-preview"} for live web access`
-                              : "Adds :online for live search"
-                            : "Not available for this model"}
+                {(draft.provider === "openrouter" ||
+                  draft.provider === "openai") &&
+                  selectedModel && (
+                    <div className="flex items-start justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2.5">
+                      <div className="flex items-start gap-2">
+                        <Globe className="h-3.5 w-3.5 mt-0.5 text-primary/60 shrink-0" />
+                        <div>
+                          <div className="font-mono text-[11px] font-bold text-foreground">
+                            Web Grounding
+                          </div>
+                          <div className="font-mono text-[9px] text-muted-foreground mt-0.5 leading-relaxed">
+                            {selectedModel.supportsGrounding
+                              ? draft.provider === "openai"
+                                ? `Uses ${selectedModel.groundingModelId ?? "search-preview"} for live web access`
+                                : "Adds :online for live search"
+                              : "Not available for this model"}
+                          </div>
                         </div>
                       </div>
+                      <button
+                        onClick={() =>
+                          selectedModel.supportsGrounding &&
+                          setDraft((d) => ({
+                            ...d,
+                            webGrounding: !d.webGrounding,
+                          }))
+                        }
+                        disabled={!selectedModel.supportsGrounding}
+                        className={`relative shrink-0 h-5 w-9 rounded-full transition-all duration-200 ${
+                          draft.webGrounding && selectedModel.supportsGrounding
+                            ? "bg-primary"
+                            : "bg-white/10"
+                        } disabled:opacity-30 disabled:cursor-not-allowed`}
+                      >
+                        <span
+                          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${
+                            draft.webGrounding &&
+                            selectedModel.supportsGrounding
+                              ? "left-5"
+                              : "left-0.5"
+                          }`}
+                        />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => selectedModel.supportsGrounding && setDraft(d => ({ ...d, webGrounding: !d.webGrounding }))}
-                      disabled={!selectedModel.supportsGrounding}
-                      className={`relative shrink-0 h-5 w-9 rounded-full transition-all duration-200 ${
-                        draft.webGrounding && selectedModel.supportsGrounding ? "bg-primary" : "bg-white/10"
-                      } disabled:opacity-30 disabled:cursor-not-allowed`}
-                    >
-                      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${
-                        draft.webGrounding && selectedModel.supportsGrounding ? "left-5" : "left-0.5"
-                      }`} />
-                    </button>
-                  </div>
-                )}
+                  )}
 
                 {/* API Status */}
-                <div className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${
-                  draft.apiKey
-                    ? "bg-primary/10 border border-primary/20 text-primary"
-                    : "bg-white/5 border border-white/5 text-muted-foreground"
-                }`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${draft.apiKey ? "bg-primary animate-pulse" : "bg-white/30"}`} />
-                  {draft.apiKey ? `${currentPreset.label} — API key configured` : "No API key — AI disabled"}
+                <div
+                  className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${
+                    draft.apiKey
+                      ? "bg-primary/10 border border-primary/20 text-primary"
+                      : "bg-white/5 border border-white/5 text-muted-foreground"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${draft.apiKey ? "bg-primary animate-pulse" : "bg-white/30"}`}
+                  />
+                  {draft.apiKey
+                    ? `${currentPreset.label} — API key configured`
+                    : "No API key — AI disabled"}
                 </div>
               </motion.div>
             )}
@@ -559,5 +713,5 @@ export function ProjectSidebar({
         </div>
       </div>
     </div>
-  )
+  );
 }
