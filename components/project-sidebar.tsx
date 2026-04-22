@@ -169,6 +169,9 @@ export function ProjectSidebar({
   const selectedModel =
     models.find((m) => m.id === draft.modelId) || models[0] || undefined;
 
+  // Actual model ID used by the UI, accounting for the fallback
+  const effectiveModelId = selectedModel?.id ?? draft.modelId;
+
   return (
     <div
       style={{
@@ -569,12 +572,12 @@ export function ProjectSidebar({
                                   >
                                     <div
                                       className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                                        draft.modelId === model.id
+                                        effectiveModelId === model.id
                                           ? "border-primary bg-primary/20"
                                           : "border-white/10"
                                       }`}
                                     >
-                                      {draft.modelId === model.id && (
+                                      {effectiveModelId === model.id && (
                                         <Check className="h-2.5 w-2.5 text-primary" />
                                       )}
                                     </div>
