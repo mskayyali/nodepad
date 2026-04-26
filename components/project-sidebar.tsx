@@ -131,7 +131,9 @@ export function ProjectSidebar({
 
   const currentPreset = getPreset(draft.provider)
   const models = getModelsForProvider(draft.provider)
-  const selectedModel = models.find(m => m.id === draft.modelId) || models[0] || undefined
+  const selectedModel = draft.useCustomModel
+    ? undefined
+    : models.find(m => m.id === draft.modelId) || models[0] || undefined
 
   return (
     <div
@@ -327,6 +329,7 @@ export function ProjectSidebar({
                                   modelId: newModels[0]?.id ?? d.modelId,
                                   webGrounding: d.webGrounding,
                                   customBaseUrl: "",
+                                  useCustomModel: false,
                                   // Restore the saved key for this provider if one exists,
                                   // otherwise clear so the user knows to enter a new one.
                                   apiKey: d.providerKeys?.[preset.id] ?? "",
@@ -407,17 +410,33 @@ export function ProjectSidebar({
                   <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
                     Model
                   </label>
-                  {models.length === 0 ? (
-                    <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
-                      <input
-                        type="text"
-                        value={draft.modelId}
-                        onChange={e => setDraft(d => ({ ...d, modelId: e.target.value }))}
-                        placeholder="e.g. gpt-4o, claude-3-opus-20240229"
-                        className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
-                        autoComplete="off"
-                        spellCheck={false}
-                      />
+                  {(models.length === 0 || draft.useCustomModel) ? (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
+                        <input
+                          type="text"
+                          value={draft.modelId}
+                          onChange={e => setDraft(d => ({ ...d, modelId: e.target.value, useCustomModel: true }))}
+                          placeholder={draft.provider === "openrouter" ? "e.g. anthropic/claude-opus-4.1" : "e.g. gpt-4o"}
+                          className="flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                          autoComplete="off"
+                          spellCheck={false}
+                          autoFocus={draft.useCustomModel && !draft.modelId}
+                        />
+                      </div>
+                      {models.length > 0 && (
+                        <button
+                          onClick={() => setDraft(d => ({
+                            ...d,
+                            useCustomModel: false,
+                            modelId: models[0]?.id ?? d.modelId,
+                            webGrounding: models[0]?.supportsGrounding ? d.webGrounding : false,
+                          }))}
+                          className="self-start font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          ← Use preset
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="relative">
@@ -444,7 +463,7 @@ export function ProjectSidebar({
                               <button
                                 key={model.id}
                                 onClick={() => {
-                                  setDraft(d => ({ ...d, modelId: model.id, webGrounding: model.supportsGrounding ? d.webGrounding : false }))
+                                  setDraft(d => ({ ...d, modelId: model.id, useCustomModel: false, webGrounding: model.supportsGrounding ? d.webGrounding : false }))
                                   setModelOpen(false)
                                 }}
                                 className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors"
@@ -461,6 +480,21 @@ export function ProjectSidebar({
                                 {model.supportsGrounding && (draft.provider === "openrouter" || draft.provider === "openai") && <Globe className="ml-auto h-3 w-3 shrink-0 text-primary/50" />}
                               </button>
                             ))}
+                            <button
+                              onClick={() => {
+                                setDraft(d => ({ ...d, useCustomModel: true, modelId: "", webGrounding: false }))
+                                setModelOpen(false)
+                              }}
+                              className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-white/5 transition-colors border-t border-white/5"
+                            >
+                              <div className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border border-dashed border-white/20">
+                                <Edit3 className="h-2 w-2 text-muted-foreground" />
+                              </div>
+                              <div>
+                                <div className="font-mono text-[10px] font-bold text-foreground">Custom Model ID…</div>
+                                <div className="font-mono text-[9px] text-muted-foreground">Enter any identifier supported by the provider</div>
+                              </div>
+                            </button>
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -469,34 +503,44 @@ export function ProjectSidebar({
                 </div>
 
                 {/* Web Grounding (OpenRouter + OpenAI) */}
-                {(draft.provider === "openrouter" || draft.provider === "openai") && selectedModel && (
-                  <div className="flex items-start justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2.5">
-                    <div className="flex items-start gap-2">
-                      <Globe className="h-3.5 w-3.5 mt-0.5 text-primary/60 shrink-0" />
-                      <div>
-                        <div className="font-mono text-[11px] font-bold text-foreground">Web Grounding</div>
-                        <div className="font-mono text-[9px] text-muted-foreground mt-0.5 leading-relaxed">
-                          {selectedModel.supportsGrounding
-                            ? draft.provider === "openai"
-                              ? `Uses ${selectedModel.groundingModelId ?? "search-preview"} for live web access`
-                              : "Adds :online for live search"
-                            : "Not available for this model"}
+                {(draft.provider === "openrouter" || draft.provider === "openai") && (selectedModel || draft.useCustomModel) && (() => {
+                  // In custom mode we trust the user — no preset metadata to consult.
+                  const groundingAllowed = draft.useCustomModel || !!selectedModel?.supportsGrounding
+                  const groundingActive = draft.webGrounding && groundingAllowed
+                  const description = draft.useCustomModel
+                    ? draft.provider === "openrouter"
+                      ? "Adds :online — your custom model must support it"
+                      : "Sends web_search_options — your custom model must support it"
+                    : selectedModel?.supportsGrounding
+                      ? draft.provider === "openai"
+                        ? `Uses ${selectedModel.groundingModelId ?? "search-preview"} for live web access`
+                        : "Adds :online for live search"
+                      : "Not available for this model"
+                  return (
+                    <div className="flex items-start justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2.5">
+                      <div className="flex items-start gap-2">
+                        <Globe className="h-3.5 w-3.5 mt-0.5 text-primary/60 shrink-0" />
+                        <div>
+                          <div className="font-mono text-[11px] font-bold text-foreground">Web Grounding</div>
+                          <div className="font-mono text-[9px] text-muted-foreground mt-0.5 leading-relaxed">
+                            {description}
+                          </div>
                         </div>
                       </div>
+                      <button
+                        onClick={() => groundingAllowed && setDraft(d => ({ ...d, webGrounding: !d.webGrounding }))}
+                        disabled={!groundingAllowed}
+                        className={`relative shrink-0 h-5 w-9 rounded-full transition-all duration-200 ${
+                          groundingActive ? "bg-primary" : "bg-white/10"
+                        } disabled:opacity-30 disabled:cursor-not-allowed`}
+                      >
+                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${
+                          groundingActive ? "left-5" : "left-0.5"
+                        }`} />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => selectedModel.supportsGrounding && setDraft(d => ({ ...d, webGrounding: !d.webGrounding }))}
-                      disabled={!selectedModel.supportsGrounding}
-                      className={`relative shrink-0 h-5 w-9 rounded-full transition-all duration-200 ${
-                        draft.webGrounding && selectedModel.supportsGrounding ? "bg-primary" : "bg-white/10"
-                      } disabled:opacity-30 disabled:cursor-not-allowed`}
-                    >
-                      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${
-                        draft.webGrounding && selectedModel.supportsGrounding ? "left-5" : "left-0.5"
-                      }`} />
-                    </button>
-                  </div>
-                )}
+                  )
+                })()}
 
                 {/* API Status */}
                 <div className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${
