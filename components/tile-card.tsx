@@ -229,6 +229,9 @@ export const TileCard = memo(function TileCard({
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     if (effectiveCollapsed) return
+    // Already editing — let the native double-click select a word in the
+    // textarea instead of bubbling up and resetting our edit buffer.
+    if (isEditing || isEditingAnnotation) return
     const target = e.target as HTMLElement
     if (target.closest('a')) return
     // Capture current height before any state changes to prevent shrink during editing
@@ -240,7 +243,7 @@ export const TileCard = memo(function TileCard({
     }
     setEditText(block.text)
     setIsEditing(true)
-  }, [block.text, block.annotation, effectiveCollapsed])
+  }, [block.text, block.annotation, effectiveCollapsed, isEditing, isEditingAnnotation])
 
   const isTextRTL = useMemo(() => isRTL(block.text), [block.text])
   const isAnnotationRTL = useMemo(() => isRTL(block.annotation || ""), [block.annotation])
