@@ -757,6 +757,67 @@ export default function Page() {
     })
   }, [activeProjectId])
 
+  // Move a block from the active workspace to another workspace.
+  // Connections (influencedBy) reference IDs in the source workspace and
+  // would be dangling in the target, so we drop them — the block can be
+  // re-enriched in its new context to discover new connections.
+  const moveBlockToWorkspace = useCallback((blockId: string, targetWorkspaceId: string) => {
+    if (targetWorkspaceId === activeProjectId) return
+    pushHistory(activeProjectId, blocksRef.current)
+    setProjects(prev => {
+      const source = prev.find(p => p.id === activeProjectId)
+      const block = source?.blocks.find(b => b.id === blockId)
+      if (!block) return prev
+      return prev.map(p => {
+        if (p.id === activeProjectId) {
+          return {
+            ...p,
+            blocks: p.blocks.filter(b => b.id !== blockId),
+            collapsedIds: p.collapsedIds.filter(id => id !== blockId),
+          }
+        }
+        if (p.id === targetWorkspaceId) {
+          const idCollision = p.blocks.some(b => b.id === blockId)
+          const moved: TextBlock = {
+            ...block,
+            id: idCollision ? generateId() : block.id,
+            influencedBy: undefined,
+          }
+          return { ...p, blocks: [...p.blocks, moved] }
+        }
+        return p
+      })
+    })
+    showUndoToast(`→ Moved to ${projectsRef.current.find(p => p.id === targetWorkspaceId)?.name ?? "space"}`)
+  }, [activeProjectId, pushHistory, showUndoToast])
+
+  // Copy keeps the original in place and creates a fresh node (new id, new
+  // timestamp, no inherited connections) in the target workspace.
+  const copyBlockToWorkspace = useCallback((blockId: string, targetWorkspaceId: string) => {
+    if (targetWorkspaceId === activeProjectId) return
+    setProjects(prev => {
+      const source = prev.find(p => p.id === activeProjectId)
+      const block = source?.blocks.find(b => b.id === blockId)
+      if (!block) return prev
+      return prev.map(p => {
+        if (p.id !== targetWorkspaceId) return p
+        const copy: TextBlock = {
+          ...block,
+          id: generateId(),
+          timestamp: Date.now(),
+          influencedBy: undefined,
+        }
+        return { ...p, blocks: [...p.blocks, copy] }
+      })
+    })
+    showUndoToast(`⎘ Copied to ${projectsRef.current.find(p => p.id === targetWorkspaceId)?.name ?? "space"}`)
+  }, [activeProjectId, showUndoToast])
+
+  const workspaceOptions = useMemo(
+    () => projects.map(p => ({ id: p.id, name: p.name })),
+    [projects]
+  )
+
   const handleCommand = useCallback((cmd: string, text?: string) => {
     setIsCommandKOpen(false)
     
@@ -915,6 +976,10 @@ export default function Page() {
                   onDeleteSubTask={handleDeleteSubTask}
                   highlightedBlockId={highlightedBlockId}
                   onHighlight={setHighlightedBlockId}
+                  workspaces={workspaceOptions}
+                  activeWorkspaceId={activeProjectId}
+                  onMoveToWorkspace={moveBlockToWorkspace}
+                  onCopyToWorkspace={copyBlockToWorkspace}
                 />
               ) : viewMode === "kanban" ? (
                 <KanbanArea
@@ -930,6 +995,10 @@ export default function Page() {
                   onToggleSubTask={handleToggleSubTask}
                   onDeleteSubTask={handleDeleteSubTask}
                   collapsedIds={new Set(activeProject.collapsedIds)}
+                  workspaces={workspaceOptions}
+                  activeWorkspaceId={activeProjectId}
+                  onMoveToWorkspace={moveBlockToWorkspace}
+                  onCopyToWorkspace={copyBlockToWorkspace}
                 />
               ) : (
                 <GraphArea
