@@ -52,6 +52,10 @@ interface TilingAreaProps {
   onDeleteSubTask: (id: string, subTaskId: string) => void
   highlightedBlockId?: string | null
   onHighlight: (id: string | null) => void
+  workspaces?: { id: string; name: string }[]
+  activeWorkspaceId?: string
+  onMoveToWorkspace?: (blockId: string, targetWorkspaceId: string) => void
+  onCopyToWorkspace?: (blockId: string, targetWorkspaceId: string) => void
 }
 
 export function TilingArea({
@@ -68,6 +72,10 @@ export function TilingArea({
   onDeleteSubTask,
   highlightedBlockId,
   onHighlight,
+  workspaces,
+  activeWorkspaceId,
+  onMoveToWorkspace,
+  onCopyToWorkspace,
 }: TilingAreaProps) {
   const mod = useModKey()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -205,6 +213,10 @@ export function TilingArea({
               onConnectionLock={handleConnectionLock}
               isConnectionLocked={lockedConnectionId === block.id}
               allBlocks={blocks}
+              workspaces={workspaces}
+              activeWorkspaceId={activeWorkspaceId}
+              onMoveToWorkspace={onMoveToWorkspace}
+              onCopyToWorkspace={onCopyToWorkspace}
             />
           </div>
         </div>
@@ -252,6 +264,10 @@ export function TilingArea({
               onConnectionLock={handleConnectionLock}
               isConnectionLocked={lockedConnectionId === taskBlock.id}
               allBlocks={blocks}
+              workspaces={workspaces}
+              activeWorkspaceId={activeWorkspaceId}
+              onMoveToWorkspace={onMoveToWorkspace}
+              onCopyToWorkspace={onCopyToWorkspace}
             />
         </div>
       )}
