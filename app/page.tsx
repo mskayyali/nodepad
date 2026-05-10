@@ -265,8 +265,11 @@ export default function Page() {
     setActiveProjectId(nextActiveId)
     setIntroSeen(state.introSeen)
     setIsIntroOpen(!state.introSeen)
+    if (state.aiSettings) {
+      updateSettings(state.aiSettings)
+    }
     setIsLoaded(true)
-  }, [])
+  }, [updateSettings])
 
   // 1. Persistence: Initial Load
   useEffect(() => {
@@ -293,7 +296,7 @@ export default function Page() {
 
   // 2. Persistence: Save on Change (debounced)
   useEffect(() => {
-    if (!isLoaded || !sessionUser) return
+    if (!isLoaded || !sessionUser || !isHydrated) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
 
     const snapshot = {
@@ -301,6 +304,7 @@ export default function Page() {
       activeProjectId: activeProjectId || null,
       backupProjects: projects,
       introSeen,
+      aiSettings: settings,
     }
 
     saveTimerRef.current = setTimeout(() => {
@@ -327,7 +331,7 @@ export default function Page() {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     }
-  }, [projects, activeProjectId, introSeen, isLoaded, sessionUser, isGuest])
+  }, [projects, activeProjectId, introSeen, settings, isLoaded, sessionUser, isGuest, isHydrated])
 
   const handleLogout = useCallback(() => {
     if (isGuest) {
