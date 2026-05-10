@@ -39,6 +39,7 @@ model UserState {
   activeProjectId  String?
   backupProjects   Json?
   introSeen        Boolean  @default(false)
+  aiSettings       Json?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }

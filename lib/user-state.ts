@@ -1,12 +1,14 @@
 "use client"
 
 import type { Project } from "@/lib/types"
+import type { AISettings } from "@/lib/ai-settings"
 
 export interface UserState {
   projects: Project[]
   activeProjectId: string | null
   backupProjects: Project[] | null
   introSeen: boolean
+  aiSettings?: AISettings | null
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<{ data?: T; error?: string }> {

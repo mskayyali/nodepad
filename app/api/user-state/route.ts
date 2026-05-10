@@ -6,22 +6,40 @@ import { INITIAL_PROJECTS } from "@/lib/initial-data"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+const aiSettingsSchema = z.object({
+  apiKey: z.string().optional(),
+  modelId: z.string().optional(),
+  webGrounding: z.boolean().optional(),
+  provider: z.enum(["openrouter", "openai", "zai"]).optional(),
+  customBaseUrl: z.string().optional(),
+  openrouterCustomModelId: z.string().optional(),
+  providerKeys: z.record(z.string()).optional(),
+}).optional()
+
 const stateSchema = z.object({
   projects: z.array(z.unknown()),
   activeProjectId: z.string().nullable().optional(),
   backupProjects: z.array(z.unknown()).nullable().optional(),
   introSeen: z.boolean().optional(),
+  aiSettings: aiSettingsSchema,
 })
 
-function normalizeState(raw: { projects?: unknown; activeProjectId?: unknown; backupProjects?: unknown; introSeen?: unknown }) {
+function normalizeState(raw: {
+  projects?: unknown
+  activeProjectId?: unknown
+  backupProjects?: unknown
+  introSeen?: unknown
+  aiSettings?: unknown
+}) {
   const projects = Array.isArray(raw.projects) ? raw.projects : INITIAL_PROJECTS
   const activeProjectId = typeof raw.activeProjectId === "string"
     ? raw.activeProjectId
     : (projects[0] as any)?.id ?? null
   const backupProjects = Array.isArray(raw.backupProjects) ? raw.backupProjects : projects
   const introSeen = typeof raw.introSeen === "boolean" ? raw.introSeen : false
+  const aiSettings = raw.aiSettings && typeof raw.aiSettings === "object" ? raw.aiSettings : null
 
-  return { projects, activeProjectId, backupProjects, introSeen }
+  return { projects, activeProjectId, backupProjects, introSeen, aiSettings }
 }
 
 export async function GET() {
@@ -50,6 +68,7 @@ export async function GET() {
         activeProjectId: created.activeProjectId,
         backupProjects: created.backupProjects,
         introSeen: created.introSeen,
+        aiSettings: created.aiSettings,
       },
     })
   }
@@ -59,6 +78,7 @@ export async function GET() {
     activeProjectId: state.activeProjectId ?? undefined,
     backupProjects: state.backupProjects ?? undefined,
     introSeen: state.introSeen,
+    aiSettings: state.aiSettings ?? undefined,
   })
 
   return Response.json({ state: normalized })
@@ -85,6 +105,7 @@ export async function PUT(request: Request) {
       activeProjectId: normalized.activeProjectId,
       backupProjects: normalized.backupProjects,
       introSeen: normalized.introSeen,
+      aiSettings: normalized.aiSettings,
     },
     create: {
       userId: user.id,
@@ -92,6 +113,7 @@ export async function PUT(request: Request) {
       activeProjectId: normalized.activeProjectId,
       backupProjects: normalized.backupProjects,
       introSeen: normalized.introSeen,
+      aiSettings: normalized.aiSettings,
     },
   })
 
@@ -101,6 +123,7 @@ export async function PUT(request: Request) {
       activeProjectId: state.activeProjectId,
       backupProjects: state.backupProjects,
       introSeen: state.introSeen,
+      aiSettings: state.aiSettings,
     },
   })
 }
