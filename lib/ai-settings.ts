@@ -19,6 +19,7 @@ export interface AIProviderPreset {
   label: string
   baseUrl: string
   keyUrl: string
+  modelUrl: string
   keyPlaceholder: string
 }
 
@@ -28,6 +29,7 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     label: "OpenRouter",
     baseUrl: "https://openrouter.ai/api/v1",
     keyUrl: "https://openrouter.ai/settings/keys",
+    modelUrl: "https://openrouter.ai/api/v1/models",
     keyPlaceholder: "sk-or-v1-...",
   },
   {
@@ -35,6 +37,7 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     label: "OpenAI",
     baseUrl: "https://api.openai.com/v1",
     keyUrl: "https://platform.openai.com/api-keys",
+    modelUrl: "https://api.openai.com/v1/models",
     keyPlaceholder: "sk-...",
   },
   {
@@ -42,6 +45,7 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     label: "Z.ai",
     baseUrl: "https://api.z.ai/api/paas/v4",
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
+    modelUrl: "https://api.z.ai/api/paas/v4/models",
     keyPlaceholder: "Your Z.ai API key",
   },
 ]
@@ -174,10 +178,71 @@ export const ZAI_MODELS: AIModel[] = [
   },
 ]
 
-export function getModelsForProvider(provider: AIProvider): AIModel[] {
+const getModelsByProvider = (provider: AIProvider, apiKey?: string): Promise<AIModel[]> => {
+  const preset = getPreset(provider)
+  const headers: Record<string, string> = provider === "openrouter" ? {
+    "HTTP-Referer": "https://nodepad.space",
+    "X-Title": "nodepad",
+  } : {}
+
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`
+  }
+
+  return fetch(preset.modelUrl, { headers })
+    .then(res => res.json())
+    .then(data => {
+      if (provider === "openrouter") {
+        return (data.data || []).map((m: any) => ({
+          id: m.id,
+          label: m.name,
+          shortLabel: m.name,
+          description: m.description,
+          supportsGrounding: m.supports_grounding,
+        }))
+      }
+      if (provider === "openai") {
+        return data.data.map((m: any) => ({
+          id: m.id,
+          label: m.id,
+          shortLabel: m.id.split("/").pop(),
+          description: "",
+          supportsGrounding: ["gpt-4o", "gpt-4o-mini"].includes(m.id),
+        }))
+      }
+      if (provider === "zai") {
+        return data.models.map((m: any) => ({
+          id: m.id,
+          label: m.name,
+          shortLabel: m.name,
+          description: m.description,
+          supportsGrounding: false,
+        }))
+      }
+      return []
+    })
+    .catch(() => {
+      // If the request fails, fall back to the hardcoded list for this provider
+      return provider === "openrouter" ? AI_MODELS
+        : provider === "openai" ? OPENAI_MODELS
+          : provider === "zai" ? ZAI_MODELS
+            : AI_MODELS
+    })
+}
+
+
+
+export async function getModelsForProvider(provider: AIProvider, apiKey?: string): Promise<AIModel[]> {
+  if (provider === "openai") return getModelsByProvider(provider, apiKey)
+  if (provider === "zai")    return getModelsByProvider(provider, apiKey)
+  if (provider === "openrouter") return getModelsByProvider(provider, apiKey)
+  return AI_MODELS
+}
+
+export function getHardcodedModelsForProvider(provider: AIProvider): AIModel[] {
   if (provider === "openai") return OPENAI_MODELS
-  if (provider === "zai")    return ZAI_MODELS
-  return AI_MODELS // openrouter + safe fallback for any stale localStorage value
+  if (provider === "zai") return ZAI_MODELS
+  return AI_MODELS
 }
 
 export const DEFAULT_MODEL_ID = "openai/gpt-4o"
@@ -219,7 +284,7 @@ export interface AIConfig {
 export function loadAIConfig(): AIConfig | null {
   const s = loadSettings()
   if (!s.apiKey) return null
-  const models = getModelsForProvider(s.provider)
+  const models = getHardcodedModelsForProvider(s.provider)
   const model = models.find(m => m.id === s.modelId)
   // Use the matched model's id if found; otherwise fall back to the first model
   // for this provider.  This handles the case where localStorage still holds an
@@ -256,7 +321,7 @@ export function getProviderHeaders(config: AIConfig): Record<string, string> {
 export function getAIHeaders(): Record<string, string> {
   const config = loadAIConfig()
   if (!config) return {}
-  const models = getModelsForProvider(config.provider)
+  const models = getHardcodedModelsForProvider(config.provider)
   const model = models.find(m => m.id === config.modelId) || AI_MODELS.find(m => m.id === DEFAULT_MODEL_ID)!
   return {
     "x-or-key": config.apiKey,
@@ -275,11 +340,21 @@ export function useAISettings() {
     provider: DEFAULT_PROVIDER, customBaseUrl: "",
   })
   const [isHydrated, setIsHydrated] = useState(false)
+  const [dynamicModels, setDynamicModels] = useState<AIModel[]>([])
 
   useEffect(() => {
     setSettings(loadSettings())
     setIsHydrated(true)
   }, [])
+
+  useEffect(() => {
+    if (!isHydrated) return
+    const fetchModels = async () => {
+      const resolved = await getModelsForProvider(settings.provider, settings.apiKey)
+      setDynamicModels(resolved)
+    }
+    fetchModels()
+  }, [settings.provider, settings.apiKey, isHydrated])
 
   const updateSettings = useCallback((patch: Partial<AISettings>) => {
     setSettings(prev => {
@@ -289,7 +364,7 @@ export function useAISettings() {
     })
   }, [])
 
-  const models = getModelsForProvider(settings.provider)
+  const models = dynamicModels.length > 0 ? dynamicModels : getHardcodedModelsForProvider(settings.provider)
 
   const resolvedModelId = (() => {
     const model = models.find(m => m.id === settings.modelId) || models[0]

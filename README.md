@@ -37,15 +37,15 @@ npm run dev
 
 Open [localhost:3000](http://localhost:3000).
 
-**Add your API key**: click the menu icon (top-left) → Settings → choose your provider → paste your key. The key is stored in your browser's `localStorage` and goes directly to the AI provider — it never passes through any server.
+**Add your API key**: click the menu icon (top-left) → Settings → choose your provider → paste your key. The key is stored in your browser's `localStorage` and goes directly to the AI provider — it never passes through any server. Once a valid key is entered, **nodepad automatically fetches the latest available models** from the provider for you to choose from.
 
-**Enable web grounding** (optional): toggle "Web grounding" in Settings to let the AI cite real sources for claims, questions, and references. Supported on OpenRouter `:online` models and OpenAI search-preview models.
+**Enable web grounding** (optional): toggle "Web grounding" in Settings to let the AI cite real sources for claims, questions, and references.
 
 ---
 
 ## Providers & Models
 
-Select provider and model from the sidebar Settings panel. Each provider remembers its key independently — switching providers and back restores your key.
+Select provider and model from the sidebar Settings panel. Each provider remembers its key independently — switching providers and back restores your key. **A search bar is available in the model dropdown** to help you quickly find specific models from large selections (like OpenRouter).
 
 ### OpenRouter *(default)*
 Access to all major models through a single key. Create a free account at [openrouter.ai](https://openrouter.ai) — use the free-tier models below with no credits, or add credits for GPT-4o, Claude, and Gemini.
