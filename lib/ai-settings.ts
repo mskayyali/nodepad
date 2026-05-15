@@ -189,22 +189,31 @@ export interface AISettings {
   webGrounding: boolean
   provider: AIProvider
   customBaseUrl: string
+  /** When true, modelId is a user-supplied custom identifier and should bypass preset validation. */
+  useCustomModel: boolean
   /** Per-provider key store so switching back to a provider restores its key */
   providerKeys?: Partial<Record<AIProvider, string>>
 }
 
 const STORAGE_KEY = "nodepad-ai-settings"
 
+const EMPTY_SETTINGS: AISettings = {
+  apiKey: "",
+  modelId: DEFAULT_MODEL_ID,
+  webGrounding: false,
+  provider: DEFAULT_PROVIDER,
+  customBaseUrl: "",
+  useCustomModel: false,
+}
+
 function loadSettings(): AISettings {
-  if (typeof window === "undefined") {
-    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "" }
-  }
+  if (typeof window === "undefined") return { ...EMPTY_SETTINGS }
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "" }
-    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "", ...JSON.parse(raw) }
+    if (!raw) return { ...EMPTY_SETTINGS }
+    return { ...EMPTY_SETTINGS, ...JSON.parse(raw) }
   } catch {
-    return { apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false, provider: DEFAULT_PROVIDER, customBaseUrl: "" }
+    return { ...EMPTY_SETTINGS }
   }
 }
 
@@ -221,16 +230,19 @@ export function loadAIConfig(): AIConfig | null {
   if (!s.apiKey) return null
   const models = getModelsForProvider(s.provider)
   const model = models.find(m => m.id === s.modelId)
-  // Use the matched model's id if found; otherwise fall back to the first model
-  // for this provider.  This handles the case where localStorage still holds an
-  // OpenRouter-prefixed id (e.g. "openai/gpt-4o") after switching to OpenAI —
-  // that string won't match any entry in OPENAI_MODELS so we fall back to "gpt-4o".
-  const modelId = model?.id ?? models[0]?.id ?? s.modelId ?? DEFAULT_MODEL_ID
-  // Z.ai does not support grounding; only openrouter and openai do
+  // For custom model IDs, pass the user-supplied value through unmodified.
+  // Otherwise, prefer the matched preset and fall back to the first model for
+  // this provider — this guards against stale localStorage holding an
+  // OpenRouter-prefixed id (e.g. "openai/gpt-4o") after switching to OpenAI.
+  const modelId = s.useCustomModel
+    ? (s.modelId || DEFAULT_MODEL_ID)
+    : (model?.id ?? models[0]?.id ?? s.modelId ?? DEFAULT_MODEL_ID)
+  // Z.ai does not support grounding; only openrouter and openai do.
+  // For custom models we trust the user's toggle — they vouch the model supports it.
   const supportsGrounding =
     (s.provider === "openrouter" || s.provider === "openai") &&
     s.webGrounding &&
-    (model?.supportsGrounding ?? false)
+    (s.useCustomModel || (model?.supportsGrounding ?? false))
   return { apiKey: s.apiKey, modelId, supportsGrounding, provider: s.provider, customBaseUrl: s.customBaseUrl }
 }
 
@@ -270,10 +282,7 @@ export function useAISettings() {
   // Load the real localStorage value after mount to avoid hydration mismatches
   // caused by settings.apiKey toggling conditional DOM blocks (API key banner,
   // modelLabel prop, etc.) between the server render and client hydration.
-  const [settings, setSettings] = useState<AISettings>({
-    apiKey: "", modelId: DEFAULT_MODEL_ID, webGrounding: false,
-    provider: DEFAULT_PROVIDER, customBaseUrl: "",
-  })
+  const [settings, setSettings] = useState<AISettings>({ ...EMPTY_SETTINGS })
   const [isHydrated, setIsHydrated] = useState(false)
 
   useEffect(() => {
@@ -292,6 +301,13 @@ export function useAISettings() {
   const models = getModelsForProvider(settings.provider)
 
   const resolvedModelId = (() => {
+    if (settings.useCustomModel) {
+      const id = settings.modelId || DEFAULT_MODEL_ID
+      if (settings.provider === "openrouter" && settings.webGrounding) {
+        return id.endsWith(":online") ? id : `${id}:online`
+      }
+      return id
+    }
     const model = models.find(m => m.id === settings.modelId) || models[0]
     if (!model) return settings.modelId
     if (settings.provider === "openrouter" && settings.webGrounding && model.supportsGrounding) {
@@ -300,13 +316,21 @@ export function useAISettings() {
     return model.id
   })()
 
-  const currentModel: AIModel = models.find(m => m.id === settings.modelId) || models[0] || {
-    id: settings.modelId,
-    label: settings.modelId,
-    shortLabel: settings.modelId.split("/").pop() || settings.modelId,
-    description: "Custom model",
-    supportsGrounding: false,
-  }
+  const currentModel: AIModel = settings.useCustomModel
+    ? {
+        id: settings.modelId,
+        label: settings.modelId,
+        shortLabel: settings.modelId.split("/").pop() || settings.modelId,
+        description: "Custom model",
+        supportsGrounding: false,
+      }
+    : models.find(m => m.id === settings.modelId) || models[0] || {
+        id: settings.modelId,
+        label: settings.modelId,
+        shortLabel: settings.modelId.split("/").pop() || settings.modelId,
+        description: "Custom model",
+        supportsGrounding: false,
+      }
 
   return { settings, updateSettings, resolvedModelId, currentModel, models, isHydrated }
 }
