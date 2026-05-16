@@ -7,37 +7,23 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install SSH Key
-        uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          known_hosts: 'unnecessary'
-          if_key_exists: replace
-
-      - name: Deploy via SSH
+      - name: Deploy
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-            set -e
-            cd /nodepad
+          set -e
+          cd /nodepad
 
-            export DATABASE_URL="${{ secrets.DATABASE_URL }}"
-            export NODE_ENV=production
+          export DATABASE_URL="${{ secrets.DATABASE_URL }}"
+          export NODE_ENV=production
 
-            git reset --hard origin/main
-            git pull
-            npm ci
-            npx prisma migrate deploy
-            npx prisma generate
-            npm run build
-            pm2 reload nodepad --update-env
-          EOF
+          git reset --hard origin/main
+          git pull
+          npm ci
+          npx prisma migrate deploy
+          npx prisma generate
+          npm run build
+          pm2 reload nodepad --update-env
