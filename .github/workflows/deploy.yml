@@ -1,9 +1,5 @@
 name: Deploy Nodepad
 
-jobs:
-  deploy:
-    runs-on: self-hosted
-    environment: production
 
 on:
   push:
@@ -13,6 +9,7 @@ on:
 jobs:
   deploy:
     runs-on: self-hosted
+    environment: production
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
