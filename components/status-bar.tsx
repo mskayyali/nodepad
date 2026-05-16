@@ -22,6 +22,8 @@ interface StatusBarProps {
   modelLabel?: string
   showHelpTooltip?: boolean
   onHelpTooltipDismiss?: () => void
+  sessionUsername?: string
+  onLogout?: () => void
 }
 
 export function StatusBar({
@@ -38,6 +40,8 @@ export function StatusBar({
   modelLabel,
   showHelpTooltip,
   onHelpTooltipDismiss,
+  sessionUsername,
+  onLogout,
 }: StatusBarProps) {
   const [time, setTime] = useState("")
   const [isAboutOpen, setIsAboutOpen] = useState(false)
@@ -160,6 +164,23 @@ export function StatusBar({
               {modelLabel}
             </span>
           )}
+          {sessionUsername && (
+            <>
+              <span className="font-mono text-[9px] text-muted-foreground/60 uppercase tracking-wider px-1.5">
+                {sessionUsername}
+              </span>
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  aria-label="Log out"
+                  className="px-1.5 py-0.5 rounded-sm text-[9px] font-mono uppercase tracking-wider text-muted-foreground/70 hover:text-foreground hover:bg-secondary transition-colors"
+                  title="Log out"
+                >
+                  Logout
+                </button>
+              )}
+            </>
+          )}
           <span className="font-mono text-[10px] text-muted-foreground tabular-nums" suppressHydrationWarning>
             {time}
           </span>
@@ -234,4 +255,3 @@ export function StatusBar({
     </header>
   )
 }
-

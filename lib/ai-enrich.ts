@@ -97,6 +97,9 @@ The user message includes a [RESPOND IN: X] directive immediately before the not
 - **No URLs or hyperlinks ever.** If you reference a source, use its name and author only (e.g. "Per Kahneman's *Thinking, Fast and Slow*" or "IPCC AR6 report"). Never generate or guess a URL — broken links are worse than no links.
 - Use markdown sparingly: **bold** for key terms, *italic* for titles. No bullet lists in annotations.
 
+## Confidence Score
+Provide a single number between 0 and 100 representing your confidence in the classification and annotation quality for this note (100 = very confident).
+
 ## Classification Priority
 Use the most specific type. Avoid 'general' unless nothing else fits. 'thesis' is only valid if forcedType is set.
 

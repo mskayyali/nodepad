@@ -9,16 +9,16 @@ import {
 } from "lucide-react"
 import { Command } from "cmdk"
 import { useModKey } from "@/lib/utils"
+import { ALL_CONTENT_TYPES, CONTENT_TYPE_CONFIG } from "@/lib/content-types"
 
 const ACTION_ITEMS = [
-  { id: "export-nodepad", icon: FolderDown,  label: "Export",  sub: ".nodepad"  },
-  { id: "import-nodepad", icon: FolderInput, label: "Import",  sub: ".nodepad"  },
-  { id: "export-md",      icon: Download,    label: "Export",  sub: "markdown"  },
-  { id: "copy-md",        icon: Clipboard,   label: "Copy",    sub: "markdown"  },
-  { id: "clear",          icon: Trash2,      label: "Clear",   sub: "canvas"    },
+  { id: "export-nodepad", icon: FolderDown, label: "Export", sub: ".nodepad" },
+  { id: "import-nodepad", icon: FolderInput, label: "Import", sub: ".nodepad" },
+  { id: "export-md", icon: Download, label: "Export", sub: "markdown" },
+  { id: "copy-md", icon: Clipboard, label: "Copy", sub: "markdown" },
+  { id: "clear", icon: Trash2, label: "Clear", sub: "canvas" },
 ]
 
-// ─── Props ───────────────────────────────────────────────────────────────────
 
 interface VimInputProps {
   onSubmit: (text: string) => void
@@ -27,52 +27,60 @@ interface VimInputProps {
   setIsCommandKOpen: (open: boolean) => void
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
 
 export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpen }: VimInputProps) {
   const [value, setValue] = React.useState("")
   const [search, setSearch] = React.useState("")
   const [focusedIdx, setFocusedIdx] = React.useState(0)
+  const [tagFocusedIdx, setTagFocusedIdx] = React.useState(0)
   const mod = useModKey()
 
   const mainInputRef = React.useRef<HTMLInputElement>(null)
   const searchInputRef = React.useRef<HTMLInputElement>(null)
   const itemRefs = React.useRef<(HTMLButtonElement | null)[]>([])
+  const tagItemRefs = React.useRef<(HTMLButtonElement | null)[]>([])
 
-  // ── Items (mod-key aware) ───────────────────────────────────────────────
 
   const VIEW_ITEMS = React.useMemo(() => [
-    { id: "tiling", icon: Grid,    label: "Tiling", sub: "" },
-    { id: "kanban", icon: Trello,  label: "Kanban", sub: "" },
-    { id: "graph",  icon: GitFork, label: "Graph",  sub: "" },
+    { id: "tiling", icon: Grid, label: "Tiling", sub: "" },
+    { id: "kanban", icon: Trello, label: "Kanban", sub: "" },
+    { id: "graph", icon: GitFork, label: "Graph", sub: "" },
   ], [])
 
   const NAV_ITEMS = React.useMemo(() => [
-    { id: "open-projects",  icon: FolderOpen, label: "Projects",    sub: "" },
-    { id: "new-project",    icon: FolderPlus, label: "New Project", sub: "" },
-    { id: "open-index",     icon: BookOpen,   label: "Index",       sub: "" },
-    { id: "open-synthesis", icon: Sparkles,   label: "Synthesis",   sub: "" },
+    { id: "open-projects", icon: FolderOpen, label: "Projects", sub: "" },
+    { id: "new-project", icon: FolderPlus, label: "New Project", sub: "" },
+    { id: "open-index", icon: BookOpen, label: "Index", sub: "" },
+    { id: "open-synthesis", icon: Sparkles, label: "Synthesis", sub: "" },
   ], [])
 
-  // ── Filtered items ──────────────────────────────────────────────────────
 
   const q = search.toLowerCase()
-  const viewItems   = q ? VIEW_ITEMS.filter(i => i.label.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q))   : VIEW_ITEMS
-  const navItems    = q ? NAV_ITEMS.filter(i  => i.label.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q))    : NAV_ITEMS
+  const viewItems = q ? VIEW_ITEMS.filter(i => i.label.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q)) : VIEW_ITEMS
+  const navItems = q ? NAV_ITEMS.filter(i => i.label.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q)) : NAV_ITEMS
   const actionItems = q ? ACTION_ITEMS.filter(i => i.label.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q)) : ACTION_ITEMS
 
-  const viewCount   = viewItems.length
-  const navCount    = navItems.length
+  const viewCount = viewItems.length
+  const navCount = navItems.length
   const actionCount = actionItems.length
-  const totalItems  = viewCount + navCount + actionCount
+  const totalItems = viewCount + navCount + actionCount
+
+  const tagMatch = React.useMemo(() => value.match(/^#([a-z]*)$/i), [value])
+  const tagQuery = (tagMatch?.[1] ?? "").toLowerCase()
+  const tagSuggestions = React.useMemo(() => {
+    if (!tagMatch) return []
+    if (!tagQuery) return ALL_CONTENT_TYPES
+    return ALL_CONTENT_TYPES.filter(tag => tag.startsWith(tagQuery))
+  }, [tagMatch, tagQuery])
+  const showTagSuggestions = !isCommandKOpen && tagSuggestions.length > 0
 
   // Section boundaries for keyboard nav
   // Section 0: views   [0 .. viewCount)
   // Section 1: nav     [viewCount .. viewCount+navCount)
   // Section 2: actions [viewCount+navCount .. total)
   const sections = React.useMemo(() => [
-    { start: 0,                    count: viewCount,   cols: 3 },
-    { start: viewCount,            count: navCount,    cols: 4 },
+    { start: 0, count: viewCount, cols: 3 },
+    { start: viewCount, count: navCount, cols: 4 },
     { start: viewCount + navCount, count: actionCount, cols: 5 },
   ], [viewCount, navCount, actionCount])
 
@@ -91,11 +99,17 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
   }, [isCommandKOpen])
 
   React.useEffect(() => { setFocusedIdx(0) }, [search])
+  React.useEffect(() => { setTagFocusedIdx(0) }, [tagQuery])
 
   // Scroll focused item into view
   React.useEffect(() => {
     itemRefs.current[focusedIdx]?.scrollIntoView({ block: "nearest", behavior: "smooth" })
   }, [focusedIdx])
+
+  React.useEffect(() => {
+    if (!showTagSuggestions) return
+    tagItemRefs.current[tagFocusedIdx]?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  }, [tagFocusedIdx, showTagSuggestions])
 
   // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -110,21 +124,27 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
     close()
   }, [onCommand, value, close])
 
+  const applyTagSuggestion = React.useCallback((tag: string) => {
+    setValue(`#${tag} `)
+    setTagFocusedIdx(0)
+    requestAnimationFrame(() => mainInputRef.current?.focus())
+  }, [])
+
   // ── Grid keyboard navigation ─────────────────────────────────────────────
 
   const getItemAtIdx = React.useCallback((idx: number): string | null => {
-    if (idx < viewCount)                        return viewItems[idx]?.id ?? null
-    if (idx < viewCount + navCount)             return navItems[idx - viewCount]?.id ?? null
+    if (idx < viewCount) return viewItems[idx]?.id ?? null
+    if (idx < viewCount + navCount) return navItems[idx - viewCount]?.id ?? null
     if (idx < viewCount + navCount + actionCount) return actionItems[idx - viewCount - navCount]?.id ?? null
     return null
   }, [viewCount, navCount, actionCount, viewItems, navItems, actionItems])
 
   const handlePopupKeyDown = React.useCallback((e: React.KeyboardEvent) => {
     if (totalItems === 0) return
-    const sec      = getSectionForIdx(focusedIdx)
+    const sec = getSectionForIdx(focusedIdx)
     const localIdx = focusedIdx - sec.start
     const rowStart = sec.start + Math.floor(localIdx / sec.cols) * sec.cols
-    const rowEnd   = Math.min(rowStart + sec.cols - 1, sec.start + sec.count - 1)
+    const rowEnd = Math.min(rowStart + sec.cols - 1, sec.start + sec.count - 1)
 
     switch (e.key) {
       case "Escape":
@@ -159,7 +179,7 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
           const nextSecStart = sec.start + sec.count
           if (nextSecStart < totalItems) {
             const col = localIdx % sec.cols
-            const ns  = getSectionForIdx(nextSecStart)
+            const ns = getSectionForIdx(nextSecStart)
             setFocusedIdx(Math.min(nextSecStart + col, nextSecStart + ns.count - 1))
           }
         }
@@ -173,9 +193,9 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
           setFocusedIdx(prevInSec)
         } else if (sec.start > 0) {
           // Move to last row of previous section
-          const prevSecEnd   = sec.start - 1
-          const ps           = getSectionForIdx(prevSecEnd)
-          const col          = localIdx % sec.cols
+          const prevSecEnd = sec.start - 1
+          const ps = getSectionForIdx(prevSecEnd)
+          const col = localIdx % sec.cols
           const lastRowStart = ps.start + Math.floor((ps.count - 1) / ps.cols) * ps.cols
           setFocusedIdx(Math.min(lastRowStart + col, ps.start + ps.count - 1))
         }
@@ -184,6 +204,28 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
     }
   }, [focusedIdx, totalItems, getSectionForIdx, getItemAtIdx, close, handleSelect])
 
+  const handleTagKeyDown = React.useCallback((e: React.KeyboardEvent) => {
+    if (!showTagSuggestions) return false
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault()
+        setTagFocusedIdx((prev) => (prev + 1) % tagSuggestions.length)
+        return true
+      case "ArrowUp":
+        e.preventDefault()
+        setTagFocusedIdx((prev) => (prev - 1 + tagSuggestions.length) % tagSuggestions.length)
+        return true
+      case "Enter": {
+        e.preventDefault()
+        const target = tagSuggestions[tagFocusedIdx]
+        if (target) applyTagSuggestion(target)
+        return true
+      }
+      default:
+        return false
+    }
+  }, [showTagSuggestions, tagSuggestions, tagFocusedIdx, applyTagSuggestion])
+
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
@@ -191,6 +233,7 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
       <Command
         className="w-full"
         onKeyDown={(e) => {
+          if (handleTagKeyDown(e)) return
           if (e.key === "Enter" && value.trim() && !isCommandKOpen) {
             onSubmit(value.trim())
             setValue("")
@@ -264,7 +307,7 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
                     <p className="px-1 pb-2 font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-white/45">Navigate</p>
                     <div className="grid grid-cols-4 gap-1.5">
                       {navItems.map((item, i) => {
-                        const idx     = viewCount + i
+                        const idx = viewCount + i
                         const focused = focusedIdx === idx
                         return (
                           <button
@@ -292,7 +335,7 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
                     <p className="px-1 pb-2 font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-white/45">Actions</p>
                     <div className="grid grid-cols-5 gap-1.5">
                       {actionItems.map((item, i) => {
-                        const idx     = viewCount + navCount + i
+                        const idx = viewCount + navCount + i
                         const focused = focusedIdx === idx
                         return (
                           <button
@@ -327,8 +370,8 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
                 {[
                   ["↑↓", "rows"],
                   ["←→", "tiles"],
-                  ["↵",  "select"],
-                  ["esc","close"],
+                  ["↵", "select"],
+                  ["esc", "close"],
                 ].map(([key, label]) => (
                   <div key={key} className="flex items-center gap-1.5">
                     <kbd className="font-mono text-[9px] text-white/50 bg-white/8 border border-white/15 rounded px-1 py-0.5">{key}</kbd>
@@ -343,6 +386,40 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
         {/* ── Main Input Bar ─────────────────────────────────────────────── */}
         <div className="w-full border-t border-white/20 bg-black/80 backdrop-blur-3xl px-6 py-5 flex items-center gap-4 transition-all duration-300 focus-within:border-primary/40 relative">
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+
+          {showTagSuggestions && (
+            <div className="absolute bottom-full left-6 right-6 mb-2 rounded-md border border-white/10 bg-black/90 backdrop-blur-3xl shadow-[0_-16px_40px_-18px_rgba(0,0,0,0.7)] overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+                <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-white/55">Tags</span>
+                <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-white/35">↑↓ · ↵ apply</span>
+              </div>
+              <div className="max-h-40 overflow-y-auto scrollbar-none">
+                {tagSuggestions.map((tag, idx) => {
+                  const config = CONTENT_TYPE_CONFIG[tag]
+                  const focused = idx === tagFocusedIdx
+                  return (
+                    <button
+                      key={tag}
+                      ref={el => { tagItemRefs.current[idx] = el }}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => applyTagSuggestion(tag)}
+                      onMouseEnter={() => setTagFocusedIdx(idx)}
+                      className={`flex w-full items-center justify-between px-3 py-2 text-left transition-colors ${focused ? "bg-primary/15 text-primary" : "text-white/70 hover:bg-white/5 hover:text-white"
+                        }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] font-bold">#{tag}</span>
+                        <span className="font-mono text-[9px] text-white/45">{config.label}</span>
+                      </div>
+                      <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-white/30">
+                        {focused ? "selected" : ""}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-3 flex-1">
             <div className="font-mono text-[10px] font-bold text-white/60 uppercase tracking-[0.2em] select-none">

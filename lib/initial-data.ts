@@ -1,4 +1,4 @@
-import type { Project } from "@/app/page.tsx"
+import type { Project } from "@/lib/types"
 
 export const INITIAL_PROJECTS: Project[] = [
   {

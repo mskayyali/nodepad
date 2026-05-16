@@ -1,0 +1,40 @@
+name: Deploy Nodepad
+
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    environment: production
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Environement
+        run: |
+          set -e
+          cd /root/nodepad
+
+          export DATABASE_URL="${{ secrets.DATABASE_URL }}"
+          export NODE_ENV=production
+
+      - name: Pull Latest Channges
+        run: |
+          git reset --hard origin/main
+          git pull
+      - name: Install Dependencies
+        run: |
+          npm ci
+      
+      - name: Run Migrations
+        run: |
+          DATABASE_URL="${{ secrets.DATABASE_URL }}" npx prisma migrate deploy
+          DATABASE_URL="${{ secrets.DATABASE_URL }}" npx prisma generate
+      - name: Build and Restart
+        run: |
+          npm run build
+          pm2 reload nodepad --update-env

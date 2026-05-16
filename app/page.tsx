@@ -7,38 +7,49 @@ import { KanbanArea } from "@/components/kanban-area"
 import { GraphArea } from "@/components/graph-area"
 import { ProjectSidebar } from "@/components/project-sidebar"
 import { StatusBar } from "@/components/status-bar"
-import { GhostPanel, type GhostNote } from "@/components/ghost-panel"
+import { AuthScreen } from "@/components/auth-screen"
+import { GhostPanel } from "@/components/ghost-panel"
+import { TileIndex } from "@/components/tile-index"
 import { VimInput } from "@/components/vim-input"
 import { IntroModal } from "@/components/intro-modal"
 import type { TextBlock } from "@/components/tile-card"
 import type { ContentType } from "@/lib/content-types"
 import { INITIAL_PROJECTS } from "@/lib/initial-data"
+import type { Project } from "@/lib/types"
 import { useAISettings } from "@/lib/ai-settings"
 import { enrichBlockClient } from "@/lib/ai-enrich"
 import { generateGhostClient } from "@/lib/ai-ghost"
 import { exportToMarkdown, downloadMarkdown, copyToClipboard } from "@/lib/export"
 import { downloadNodepadFile, parseNodepadFile, NodepadParseError } from "@/lib/nodepad-format"
 import { detectContentType } from "@/lib/detect-content-type"
+import { clearSession, getSessionUser, type SessionUser } from "@/lib/auth"
+import { fetchUserState, saveUserState } from "@/lib/user-state"
+
+const SKIP_LOGIN_KEY = "nodepad-skip-login"
+const GUEST_PROJECTS_KEY = "nodepad-guest-projects"
+const GUEST_ACTIVE_PROJECT_KEY = "nodepad-guest-active-project"
+const GUEST_BACKUP_KEY = "nodepad-guest-backup"
+const GUEST_INTRO_SEEN_KEY = "nodepad-guest-intro-seen"
+const LEGACY_PROJECTS_KEY = "nodepad-projects"
+const LEGACY_ACTIVE_PROJECT_KEY = "nodepad-active-project"
+const LEGACY_BACKUP_KEY = "nodepad-backup"
+const GUEST_USER: SessionUser = { id: "guest", username: "Guest" }
 
 function generateId() {
-  return Math.random().toString(36).substring(2, 10)
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
+  }
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const bytes = crypto.getRandomValues(new Uint8Array(16))
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("")
+  }
+  return `id-${Date.now().toString(36)}`
 }
-
-export interface Project {
-  id: string
-  name: string
-  blocks: TextBlock[]
-  collapsedIds: string[]
-  ghostNotes: GhostNote[]
-  lastGhostBlockCount?: number
-  lastGhostTimestamp?: number
-  /** Texts of recently generated ghost notes — passed back to the API to prevent near-duplicates */
-  lastGhostTexts?: string[]
-}
-
-import { TileIndex } from "@/components/tile-index"
 
 export default function Page() {
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null)
+  const [isAuthReady, setIsAuthReady] = useState(false)
+  const [isGuest, setIsGuest] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [activeProjectId, setActiveProjectId] = useState<string>("")
   const [highlightedBlockId, setHighlightedBlockId] = useState<string | null>(null)
@@ -50,10 +61,31 @@ export default function Page() {
   const [isCommandKOpen, setIsCommandKOpen] = useState(false)
   const [jumpToSettings, setJumpToSettings] = useState(false)
   const [isIntroOpen, setIsIntroOpen] = useState(false)
+  const [introSeen, setIntroSeen] = useState(false)
   const [showHelpTooltip, setShowHelpTooltip] = useState(false)
   const helpTooltipTimer = useRef<NodeJS.Timeout | null>(null)
-  const { settings, updateSettings, resolvedModelId, currentModel, isHydrated } = useAISettings()
+  const { settings, updateSettings, currentModel, isHydrated } = useAISettings()
   const debounceTimers = useRef<Record<string, Record<string, NodeJS.Timeout>>>({})
+
+  useEffect(() => {
+    let active = true
+    const loadSession = async () => {
+      if (typeof window !== "undefined" && localStorage.getItem(SKIP_LOGIN_KEY) === "true") {
+        if (!active) return
+        setIsGuest(true)
+        setSessionUser(GUEST_USER)
+        setIsAuthReady(true)
+        return
+      }
+      const user = await getSessionUser()
+      if (!active) return
+      setIsGuest(false)
+      setSessionUser(user)
+      setIsAuthReady(true)
+    }
+    loadSession()
+    return () => { active = false }
+  }, [])
 
   // ── Undo history ring (max 20 block snapshots per project) ───────────────
   const blockHistoryRef = useRef<Record<string, TextBlock[][]>>({})
@@ -81,7 +113,7 @@ export default function Page() {
   // ── Intro modal ──────────────────────────────────────────────────────────
   const handleIntroClose = useCallback(() => {
     setIsIntroOpen(false)
-    localStorage.setItem("nodepad-intro-seen", "true")
+    setIntroSeen(true)
     // Show the help tooltip for 6 seconds pointing to the ? button
     setShowHelpTooltip(true)
     if (helpTooltipTimer.current) clearTimeout(helpTooltipTimer.current)
@@ -106,6 +138,21 @@ export default function Page() {
     showUndoToast("↩ Undone")
   }, [activeProjectId, showUndoToast])
 
+  const enableGuestMode = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(SKIP_LOGIN_KEY, "true")
+    }
+    setIsGuest(true)
+    setSessionUser(GUEST_USER)
+    setIsLoaded(false)
+  }, [])
+
+  const clearGuestPreference = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(SKIP_LOGIN_KEY)
+    }
+  }, [])
+
   const activeProject = useMemo(() =>
     projects.find(p => p.id === activeProjectId) || projects[0],
   [projects, activeProjectId])
@@ -128,89 +175,190 @@ export default function Page() {
     prevActiveProjectId.current = activeProjectId
   }, [activeProjectId])
 
-  // 1. Persistence: Initial Load & Migration
-  useEffect(() => {
-    const savedProjects = localStorage.getItem("nodepad-projects")
-    const savedActiveId = localStorage.getItem("nodepad-active-project")
-    
-    const oldBlocks = localStorage.getItem("nodepad-blocks")
-    const oldCollapsed = localStorage.getItem("nodepad-collapsed")
+  const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
 
+  const loadGuestState = useCallback(() => {
     let initialProjects: Project[] = []
     let initialActiveId = ""
 
-    const backupProjects = localStorage.getItem("nodepad-backup")
+    const savedProjects = localStorage.getItem(GUEST_PROJECTS_KEY)
+    const savedActiveId = localStorage.getItem(GUEST_ACTIVE_PROJECT_KEY)
+    const backupProjects = localStorage.getItem(GUEST_BACKUP_KEY)
 
     if (savedProjects) {
       try {
         initialProjects = JSON.parse(savedProjects)
         initialActiveId = savedActiveId || initialProjects[0]?.id || ""
       } catch (e) {
-        console.error("Failed to parse saved projects — trying backup", e)
-        // Fall through to backup attempt below
+        console.error("Failed to parse guest projects — trying backup", e)
       }
     }
 
-    // Fallback: restore from silent backup if primary key was absent or corrupt
     if (initialProjects.length === 0 && backupProjects) {
       try {
         initialProjects = JSON.parse(backupProjects)
         initialActiveId = initialProjects[0]?.id || ""
-        console.info("Restored from nodepad-backup")
       } catch (e) {
-        console.error("Backup restore also failed", e)
+        console.error("Guest backup restore failed", e)
       }
     }
 
-    if (initialProjects.length === 0 && oldBlocks) {
-      try {
-        const blks = JSON.parse(oldBlocks)
-        const collapsed = oldCollapsed ? JSON.parse(oldCollapsed) : []
-        const defaultProject: Project = {
-          id: "default",
-          name: "Default Space",
-          blocks: blks,
-          collapsedIds: collapsed,
-          ghostNotes: [],
+    if (initialProjects.length === 0) {
+      const legacyProjects = localStorage.getItem(LEGACY_PROJECTS_KEY)
+      const legacyActiveId = localStorage.getItem(LEGACY_ACTIVE_PROJECT_KEY)
+      const legacyBackup = localStorage.getItem(LEGACY_BACKUP_KEY)
+
+      if (legacyProjects) {
+        try {
+          initialProjects = JSON.parse(legacyProjects)
+          initialActiveId = legacyActiveId || initialProjects[0]?.id || ""
+        } catch (e) {
+          console.error("Failed to parse legacy projects", e)
         }
-        initialProjects = [defaultProject]
-        initialActiveId = "default"
-      } catch (e) {
-        console.error("Migration failed", e)
+      }
+
+      if (initialProjects.length === 0 && legacyBackup) {
+        try {
+          initialProjects = JSON.parse(legacyBackup)
+          initialActiveId = initialProjects[0]?.id || ""
+        } catch (e) {
+          console.error("Legacy backup restore failed", e)
+        }
       }
     }
 
     if (initialProjects.length === 0) {
       initialProjects = INITIAL_PROJECTS
-      initialActiveId = INITIAL_PROJECTS[0].id
+      initialActiveId = INITIAL_PROJECTS[0]?.id || ""
     }
 
+    const introFlag = localStorage.getItem(GUEST_INTRO_SEEN_KEY) === "true"
     setProjects(initialProjects)
     setActiveProjectId(initialActiveId)
+    setIntroSeen(introFlag)
+    setIsIntroOpen(!introFlag)
     setIsLoaded(true)
-
-    // Show intro modal on first visit
-    if (!localStorage.getItem("nodepad-intro-seen")) {
-      setIsIntroOpen(true)
-    }
-
   }, [])
 
-  // 2. Persistence: Save on Change
-  useEffect(() => {
-    if (!isLoaded) return
-    localStorage.setItem("nodepad-projects", JSON.stringify(projects))
-    localStorage.setItem("nodepad-active-project", activeProjectId)
-  }, [projects, activeProjectId, isLoaded])
+  const loadUserState = useCallback(async () => {
+    setIsLoaded(false)
+    const state = await fetchUserState()
 
-  // 3. Silent rolling backup — written on every change, separate key.
-  //    If nodepad-projects is ever wiped, the load effect can fall back to this.
+    if (!state) {
+      const fallbackProjects = INITIAL_PROJECTS
+      setProjects(fallbackProjects)
+      setActiveProjectId(fallbackProjects[0]?.id || "")
+      setIntroSeen(false)
+      setIsIntroOpen(true)
+      setIsLoaded(true)
+      return
+    }
+
+    const nextProjects = Array.isArray(state.projects) && state.projects.length > 0
+      ? state.projects
+      : INITIAL_PROJECTS
+    const nextActiveId = state.activeProjectId && nextProjects.some(p => p.id === state.activeProjectId)
+      ? state.activeProjectId
+      : (nextProjects[0]?.id || "")
+
+    setProjects(nextProjects)
+    setActiveProjectId(nextActiveId)
+    setIntroSeen(state.introSeen)
+    setIsIntroOpen(!state.introSeen)
+    if (state.aiSettings) {
+      updateSettings(state.aiSettings)
+    }
+    setIsLoaded(true)
+  }, [updateSettings])
+
+  // 1. Persistence: Initial Load
   useEffect(() => {
-    if (!isLoaded || projects.length === 0) return
-    try {
-      localStorage.setItem("nodepad-backup", JSON.stringify(projects))
-    } catch { /* quota exceeded — skip silently */ }
-  }, [projects, isLoaded])
+    if (!isAuthReady) return
+    if (!sessionUser) {
+      setProjects([])
+      setActiveProjectId("")
+      setIsLoaded(false)
+      setIsIntroOpen(false)
+      setIntroSeen(false)
+      return
+    }
+    if (isGuest) {
+      loadGuestState()
+      return
+    }
+    loadUserState().catch((error) => {
+      console.error("Failed to load user state", error)
+      setProjects(INITIAL_PROJECTS)
+      setActiveProjectId(INITIAL_PROJECTS[0]?.id || "")
+      setIsLoaded(true)
+    })
+  }, [isAuthReady, sessionUser, isGuest, loadUserState, loadGuestState])
+
+  // 2. Persistence: Save on Change (debounced)
+  useEffect(() => {
+    if (!isLoaded || !sessionUser || !isHydrated) return
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+
+    const snapshot = {
+      projects,
+      activeProjectId: activeProjectId || null,
+      backupProjects: projects,
+      introSeen,
+      aiSettings: settings,
+    }
+
+    saveTimerRef.current = setTimeout(() => {
+      if (isGuest) {
+        try {
+          localStorage.setItem(GUEST_PROJECTS_KEY, JSON.stringify(snapshot.projects))
+          localStorage.setItem(GUEST_ACTIVE_PROJECT_KEY, snapshot.activeProjectId || "")
+          localStorage.setItem(GUEST_INTRO_SEEN_KEY, snapshot.introSeen ? "true" : "false")
+          try {
+            localStorage.setItem(GUEST_BACKUP_KEY, JSON.stringify(snapshot.backupProjects || snapshot.projects))
+          } catch {
+            // Quota exceeded — skip silent backup for guest
+          }
+        } catch (error) {
+          console.error("Failed to save guest state", error)
+        }
+        return
+      }
+      saveUserState(snapshot).catch((error) => {
+        console.error("Failed to save user state", error)
+      })
+    }, 600)
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    }
+  }, [projects, activeProjectId, introSeen, settings, isLoaded, sessionUser, isGuest, isHydrated])
+
+  const handleLogout = useCallback(() => {
+    if (isGuest) {
+      clearGuestPreference()
+      setIsGuest(false)
+      setSessionUser(null)
+      setProjects([])
+      setActiveProjectId("")
+      setIsLoaded(false)
+      setIsSidebarOpen(false)
+      setIsIndexOpen(false)
+      setIsGhostPanelOpen(false)
+      setIsIntroOpen(false)
+      setIntroSeen(false)
+      return
+    }
+    void clearSession()
+    setSessionUser(null)
+    setProjects([])
+    setActiveProjectId("")
+    setIsLoaded(false)
+    setIsSidebarOpen(false)
+    setIsIndexOpen(false)
+    setIsGhostPanelOpen(false)
+    setIsIntroOpen(false)
+    setIntroSeen(false)
+  }, [isGuest, clearGuestPreference])
 
   // Hidden file input for .nodepad import — triggered from sidebar or ⌘K
   const importInputRef = useRef<HTMLInputElement>(null)
@@ -434,7 +582,7 @@ export default function Page() {
             if (existingTaskIndex !== -1) {
               const existingTask = proj.blocks[existingTaskIndex]
               const newSubTask = {
-                id: Math.random().toString(36).substring(2, 9),
+                id: generateId(),
                 text: text,
                 isDone: false,
                 timestamp: Date.now()
@@ -458,7 +606,7 @@ export default function Page() {
                   contentType: "task",
                   category: "Tasks",
                   subTasks: [{
-                    id: Math.random().toString(36).substring(2, 9),
+                    id: generateId(),
                     text: text,
                     isDone: false,
                     timestamp: Date.now()
@@ -887,6 +1035,24 @@ export default function Page() {
     setIsCommandKOpen(false)
   }, [clearBlocks, addBlock, activeProjectId])
 
+  if (!isAuthReady) {
+    return <div className="h-dvh w-full bg-background" />
+  }
+
+  if (!sessionUser) {
+    return (
+      <AuthScreen
+        onAuthenticated={(user) => {
+          clearGuestPreference()
+          setIsGuest(false)
+          setSessionUser(user)
+          setIsLoaded(false)
+        }}
+        onSkip={enableGuestMode}
+      />
+    )
+  }
+
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
       {/* Hidden file input for .nodepad import */}
@@ -928,6 +1094,8 @@ export default function Page() {
           onGhostPanelToggle={() => setIsGhostPanelOpen(prev => !prev)}
           modelLabel={isHydrated && settings.apiKey ? currentModel.shortLabel : undefined}
           showHelpTooltip={showHelpTooltip}
+          sessionUsername={sessionUser.username}
+          onLogout={handleLogout}
           onHelpTooltipDismiss={() => {
             setShowHelpTooltip(false)
             if (helpTooltipTimer.current) clearTimeout(helpTooltipTimer.current)
