@@ -276,6 +276,7 @@ export function TilingArea({
       <div
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto custom-scrollbar p-0.5 relative"
+        style={{ willChange: 'transform' }}
         onClick={e => {
           // Clear connection lock when clicking the canvas background (not a tile)
           if (e.target === e.currentTarget) setLockedConnectionId(null)
