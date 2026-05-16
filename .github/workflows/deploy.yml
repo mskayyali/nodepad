@@ -12,7 +12,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Deploy
+      - name: Setup Environement
         run: |
           set -e
           cd /root/nodepad
@@ -20,10 +20,17 @@ jobs:
           export DATABASE_URL="${{ secrets.DATABASE_URL }}"
           export NODE_ENV=production
 
+      - name: pull changes and update dependencies
+        run: |
           git reset --hard origin/main
           git pull
           npm ci
+      
+      - name: Run Migrations
+        run: |
           npx prisma migrate deploy
           npx prisma generate
+      - name: Build and Restart
+        run: |
           npm run build
           pm2 reload nodepad --update-env
