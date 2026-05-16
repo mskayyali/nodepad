@@ -25,24 +25,23 @@ jobs:
 
       - name: Install Cloudflare Client & Run SSH
         run: |
-          # Download cloudflared binary on the GitHub runner
+          # 1. Download and install cloudflared client on the GitHub runner
           wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 --output-document=cloudflared
           chmod +x cloudflared
           sudo mv cloudflared /usr/local/bin/
           
-          # Inject the tunnel configuration into the runner's SSH configuration
+          # 2. Configure SSH to explicitly use cloudflared for this exact host
           mkdir -p ~/.ssh
-          echo "Host ${{ secrets.SERVER_HOST }}" >> ~/.ssh/config
-          echo "  ProxyCommand cloudflared access ssh --hostname %h" >> ~/.ssh/config
+          echo "Host ${{ secrets.SERVER_HOST }}" > ~/.ssh/config
+          echo "  ProxyCommand cloudflared access ssh --hostname ${{ secrets.SERVER_HOST }}" >> ~/.ssh/config
           
-          # Install sshpass for password support
-          sudo apt-get update && sudo apt-get install -y sshpass
-          
-          # Connect normally! The ProxyCommand handles the network bridging seamlessly
+          # 3. Connect via sshpass using your password secret
           sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
           cd /nodepad
+          
           export DATABASE_URL="${{ secrets.DATABASE_URL }}"
           export NODE_ENV=production
+
           git reset --hard origin/main
           git pull
           npm ci
