@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -14,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-node-version: '20'
+          node-version: '20'
 
       - name: Install SSH Key
         uses: shimataro/ssh-key-action@v2
@@ -23,30 +24,20 @@ jobs:
           known_hosts: 'unnecessary'
           if_key_exists: replace
 
-      - name: Install Cloudflare Client & Run SSH
+      - name: Deploy via SSH
         run: |
-          # 1. Download and install cloudflared client on the GitHub runner
-          wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 --output-document=cloudflared
-          chmod +x cloudflared
-          sudo mv cloudflared /usr/local/bin/
-          
-          # 2. Configure SSH to explicitly use cloudflared for this exact host
-          mkdir -p ~/.ssh
-          echo "Host ${{ secrets.SERVER_HOST }}" > ~/.ssh/config
-          echo "  ProxyCommand cloudflared access ssh --hostname ${{ secrets.SERVER_HOST }}" >> ~/.ssh/config
-          
-          # 3. Connect via sshpass using your password secret
-          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-          cd /nodepad
-          
-          export DATABASE_URL="${{ secrets.DATABASE_URL }}"
-          export NODE_ENV=production
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            set -e
+            cd /nodepad
 
-          git reset --hard origin/main
-          git pull
-          npm ci
-          npx prisma migrate deploy
-          npx prisma generate
-          npm run build
-          pm2 reload nodepad --update-env
+            export DATABASE_URL="${{ secrets.DATABASE_URL }}"
+            export NODE_ENV=production
+
+            git reset --hard origin/main
+            git pull
+            npm ci
+            npx prisma migrate deploy
+            npx prisma generate
+            npm run build
+            pm2 reload nodepad --update-env
           EOF
