@@ -15,7 +15,7 @@ jobs:
       - name: Deploy
         run: |
           set -e
-          cd /nodepad
+          cd /root/nodepad
 
           export DATABASE_URL="${{ secrets.DATABASE_URL }}"
           export NODE_ENV=production
