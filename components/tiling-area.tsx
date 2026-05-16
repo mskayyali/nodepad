@@ -192,6 +192,8 @@ export function TilingArea({
           key={block.id}
           id={`tile-${block.id}`}
           className="flex flex-1 p-0.5 overflow-hidden"
+          style={{ willChange: 'transform' }}
+
         >
           <div className={`flex flex-1 min-w-0 transition-[opacity,filter] duration-300 ${isDimmed ? 'opacity-15 saturate-0' : 'opacity-100'}`}>
             <TileCard
