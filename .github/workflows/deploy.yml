@@ -1,5 +1,10 @@
 name: Deploy Nodepad
 
+jobs:
+  deploy:
+    runs-on: self-hosted
+    environment: production
+
 on:
   push:
     branches:
