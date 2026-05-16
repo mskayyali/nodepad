@@ -20,16 +20,18 @@ jobs:
           export DATABASE_URL="${{ secrets.DATABASE_URL }}"
           export NODE_ENV=production
 
-      - name: pull changes and update dependencies
+      - name: Pull Latest Channges
         run: |
           git reset --hard origin/main
           git pull
+      - name: Install Dependencies
+        run: |
           npm ci
       
       - name: Run Migrations
         run: |
-          npx prisma migrate deploy
-          npx prisma generate
+          DATABASE_URL="${{ secrets.DATABASE_URL }}" npx prisma migrate deploy
+          DATABASE_URL="${{ secrets.DATABASE_URL }}" npx prisma generate
       - name: Build and Restart
         run: |
           npm run build
