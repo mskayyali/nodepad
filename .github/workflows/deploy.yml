@@ -25,21 +25,28 @@ jobs:
 
       - name: Execute Remote Deployment Commands via Native SSH
         run: |
-          ssh -6 -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+          ssh -6 -o StrictHostKeyChecking=no -o HostName="${{ secrets.SERVER_HOST }}" ${{ secrets.SERVER_USER }} << 'EOF'
+          # Navigate to project directory
           cd /nodepad
           
+          # Export environment variables for the session
           export DATABASE_URL="${{ secrets.DATABASE_URL }}"
           export NODE_ENV=production
 
+          # Pull latest changes
           git reset --hard origin/main
           git pull
 
+          # Install dependencies
           npm ci
 
+          # Run Prisma Migrations and generate client
           npx prisma migrate deploy
           npx prisma generate
 
+          # Build the Next.js application
           npm run build
 
+          # Zero-downtime reload with PM2
           pm2 reload nodepad --update-env
           EOF
