@@ -412,14 +412,14 @@ export const TileCard = memo(function TileCard({
           <span className="font-mono text-[10px] font-medium opacity-70">
             {formattedTime}
           </span>
-          {!effectiveCollapsed && block.contentType === "thesis" && (
+          {!effectiveCollapsed && (
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                onReEnrich(block.id, "thesis")
+                onReEnrich(block.id, block.contentType === "thesis" ? "thesis" : undefined)
               }}
-              className="flex h-4 w-4 items-center justify-center rounded-sm transition-all hover:bg-black/20"
-              title="Refresh thesis synthesis"
+              className={`flex h-4 w-4 items-center justify-center rounded-sm transition-all hover:bg-black/20 ${block.contentType !== "thesis" ? "opacity-40 hover:opacity-100" : ""}`}
+              title="Re-run AI enrichment"
               disabled={block.isEnriching}
             >
               <RefreshCw className={`h-2.5 w-2.5 ${block.isEnriching ? "animate-spin opacity-50" : ""}`} />
