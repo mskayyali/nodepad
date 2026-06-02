@@ -3,59 +3,59 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *, .dark));
 
 :root {
-  --background: oklch(0.13 0.005 260);
-  --foreground: oklch(0.92 0 0);
-  --card: oklch(0.17 0.005 260);
-  --card-foreground: oklch(0.92 0 0);
-  --popover: oklch(0.17 0.005 260);
-  --popover-foreground: oklch(0.92 0 0);
-  --primary: oklch(0.72 0.19 155);
-  --primary-foreground: oklch(0.13 0.005 260);
-  --secondary: oklch(0.22 0.008 260);
-  --secondary-foreground: oklch(0.85 0 0);
-  --muted: oklch(0.22 0.008 260);
-  --muted-foreground: oklch(0.72 0 0);
-  --accent: oklch(0.72 0.19 155);
-  --accent-foreground: oklch(0.13 0.005 260);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.28 0.01 260);
-  --input: oklch(0.22 0.008 260);
-  --ring: oklch(0.72 0.19 155);
-  --chart-1: oklch(0.72 0.19 155);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  --background: oklch(0.97 0.01 95);
+  --foreground: oklch(0.08 0 0);
+  --card: oklch(0.95 0.01 95);
+  --card-foreground: oklch(0.08 0 0);
+  --popover: oklch(0.97 0.01 95);
+  --popover-foreground: oklch(0.08 0 0);
+  --primary: oklch(0.5 0.18 155);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.93 0.01 95);
+  --secondary-foreground: oklch(0.12 0 0);
+  --muted: oklch(0.93 0.01 95);
+  --muted-foreground: oklch(0.32 0 0);
+  --accent: oklch(0.5 0.18 155);
+  --accent-foreground: oklch(0.99 0 0);
+  --destructive: oklch(0.45 0.22 27);
+  --destructive-foreground: oklch(0.45 0.22 27);
+  --border: oklch(0.84 0.01 95);
+  --input: oklch(0.84 0.01 95);
+  --ring: oklch(0.5 0.18 155);
+  --chart-1: oklch(0.5 0.18 155);
+  --chart-2: oklch(0.55 0.16 185);
+  --chart-3: oklch(0.35 0.1 227);
+  --chart-4: oklch(0.75 0.2 84);
+  --chart-5: oklch(0.7 0.22 70);
   --radius: 0.25rem;
-  --sidebar: oklch(0.17 0.005 260);
-  --sidebar-foreground: oklch(0.92 0 0);
-  --sidebar-primary: oklch(0.72 0.19 155);
-  --sidebar-primary-foreground: oklch(0.13 0.005 260);
-  --sidebar-accent: oklch(0.22 0.008 260);
-  --sidebar-accent-foreground: oklch(0.85 0 0);
-  --sidebar-border: oklch(0.28 0.01 260);
-  --sidebar-ring: oklch(0.72 0.19 155);
-  --type-entity: oklch(0.65 0.12 250);
-  --type-claim: oklch(0.75 0.15 80);
-  --type-question: oklch(0.68 0.18 290);
-  --type-task: oklch(0.72 0.14 195);
-  --type-idea: oklch(0.72 0.22 340);
-  --type-reference: oklch(0.65 0.15 230);
-  --type-quote: oklch(0.72 0.19 155);
-  --type-definition: oklch(0.7 0.13 220);
-  --type-opinion: oklch(0.7 0.18 340);
-  --type-reflection: oklch(0.65 0.2 300);
-  --type-narrative: oklch(0.72 0.16 50);
-  --type-comparison: oklch(0.68 0.14 180);
-  --type-thesis: oklch(0.86 0.19 88); 
-  --type-general: oklch(0.55 0.02 260);
-  --thesis-gradient: linear-gradient(135deg, oklch(0.7 0.15 160), oklch(0.7 0.15 250));
-  --thesis-foreground: oklch(0.15 0.01 260);
-  --thesis-accent: oklch(0.7 0.15 200);
+  --sidebar: oklch(0.94 0.01 95);
+  --sidebar-foreground: oklch(0.08 0 0);
+  --sidebar-primary: oklch(0.5 0.18 155);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.93 0.01 95);
+  --sidebar-accent-foreground: oklch(0.12 0 0);
+  --sidebar-border: oklch(0.84 0.01 95);
+  --sidebar-ring: oklch(0.5 0.18 155);
+  --type-entity: oklch(0.45 0.24 250);
+  --type-claim: oklch(0.5 0.28 80);
+  --type-question: oklch(0.45 0.32 290);
+  --type-task: oklch(0.45 0.26 195);
+  --type-idea: oklch(0.45 0.35 340);
+  --type-reference: oklch(0.4 0.27 230);
+  --type-quote: oklch(0.45 0.3 155);
+  --type-definition: oklch(0.4 0.25 220);
+  --type-opinion: oklch(0.45 0.3 340);
+  --type-reflection: oklch(0.4 0.33 300);
+  --type-narrative: oklch(0.45 0.28 50);
+  --type-comparison: oklch(0.4 0.25 180);
+  --type-thesis: oklch(0.6 0.3 88);
+  --type-general: oklch(0.38 0.06 260);
+  --thesis-gradient: linear-gradient(135deg, oklch(0.54 0.2 160), oklch(0.5 0.2 250));
+  --thesis-foreground: oklch(0.08 0 0);
+  --thesis-accent: oklch(0.5 0.2 200);
 }
 
 .dark {
@@ -156,7 +156,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-semibold text-base;
   }
   /* Custom scrollbar for tile cards */
   ::-webkit-scrollbar {
@@ -198,11 +198,11 @@
 .shimmer-body {
   background: linear-gradient(
     90deg,
-    oklch(0.35 0 0) 0%,
-    oklch(0.35 0 0) 15%,
-    oklch(0.92 0 0) 50%,
-    oklch(0.35 0 0) 85%,
-    oklch(0.35 0 0) 100%
+    var(--muted) 0%,
+    var(--muted) 25%,
+    var(--foreground) 50%,
+    var(--muted) 75%,
+    var(--muted) 100%
   );
   background-size: 300% 100%;
   -webkit-background-clip: text;

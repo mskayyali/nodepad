@@ -419,7 +419,7 @@ export function GraphArea({
                 ))}
               </div>
 
-              <p className="text-[13px] text-white uppercase tracking-[0.15em] whitespace-nowrap">
+              <p className="text-[13px] text-muted-foreground uppercase tracking-[0.15em] whitespace-nowrap">
                 {`type anything · #type to classify · ${mod}K for commands`}
               </p>
             </div>
@@ -647,7 +647,7 @@ export function GraphArea({
                           xmlns="http://www.w3.org/1999/xhtml"
                           style={{ width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center" }}
                         >
-                          <Icon style={{ width: 19, height: 19, color: "white", opacity: 0.92 }} />
+                          <Icon style={{ width: 19, height: 19, opacity: 0.92 }} />
                         </div>
                       </foreignObject>
                     )}
@@ -701,15 +701,14 @@ export function GraphArea({
               style={{ left: tipX, top: tipY, transform: "translateY(-100%)" }}
             >
               <div
-                className="rounded-sm shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white/10 overflow-hidden"
+                className="rounded-sm shadow-[0_4px_24px_rgba(0,0,0,0.2)] border border-border overflow-hidden"
                 style={{ minWidth: 190, maxWidth: 300 }}
               >
                 <div className="flex items-center gap-2 px-2.5 py-1.5" style={{ background: accent }}>
                   {config?.icon && React.createElement(config.icon, {
-                    className: "h-3 w-3 flex-shrink-0",
-                    style: { color: "black", opacity: 0.7 },
+                    className: "h-3 w-3 flex-shrink-0 text-white/70",
                   })}
-                  <span className="font-mono text-[9px] font-black uppercase tracking-widest text-black/70">
+                  <span className="font-mono text-[9px] font-black uppercase tracking-widest text-white/70">
                     {node.isSynthesis ? "Synthesis" : config?.label}
                   </span>
                   {node.block?.category && (
@@ -728,7 +727,7 @@ export function GraphArea({
                 </div>
               </div>
               <div
-                className="mx-4 h-2 w-2 rotate-45 border-b border-r border-white/10 bg-card/95"
+                className="mx-4 h-2 w-2 rotate-45 border-b border-r border-border bg-card/95"
                 style={{ marginTop: -1 }}
               />
             </div>

@@ -150,9 +150,9 @@ export function GraphDetailPanel({
   const headerBg = block.contentType === "thesis"
     ? "var(--thesis-gradient)"
     : block.isPinned
-      ? `linear-gradient(to right, ${accent}, color-mix(in oklch, ${accent} 80%, white 10%))`
+      ? `linear-gradient(to right, ${accent}, color-mix(in oklch, ${accent} 60%, black 15%))`
       : accent
-  const headerColor = block.contentType === "thesis" ? "var(--thesis-foreground)" : "black"
+  const headerColor = block.contentType === "thesis" ? "var(--thesis-foreground)" : "white"
 
   const connectedBlocks = allBlocks.filter(
     b => b.id !== block.id && (
@@ -192,7 +192,7 @@ export function GraphDetailPanel({
             {config.label}
           </span>
           {/* Category tag — read-only, updated by AI on enrichment */}
-          <span className="rounded-sm bg-black/10 px-1.5 py-0.5 font-mono text-[8px] font-black uppercase tracking-tighter opacity-60">
+          <span className="rounded-sm bg-muted/20 px-1.5 py-0.5 font-mono text-[8px] font-black uppercase tracking-tighter opacity-60">
             #{block.category || "no-topic"}
           </span>
         </div>
@@ -207,7 +207,7 @@ export function GraphDetailPanel({
               }
               setIsTypePickerOpen(v => !v)
             }}
-            className={`p-1 rounded-sm transition-opacity ${isTypePickerOpen ? "opacity-100 bg-black/20" : "opacity-40 hover:opacity-90"}`}
+            className={`p-1 rounded-sm transition-opacity ${isTypePickerOpen ? "opacity-100 bg-muted/40" : "opacity-40 hover:opacity-90"}`}
             title="Change type"
           >
             <Tag className="h-3 w-3" />

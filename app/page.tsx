@@ -1038,8 +1038,8 @@ export default function Page() {
               transition={{ duration: 0.15, ease: "easeOut" }}
               className="absolute bottom-[72px] left-1/2 -translate-x-1/2 z-[130] pointer-events-none"
             >
-              <div className="px-3 py-1.5 rounded-sm bg-black/90 border border-white/15 backdrop-blur-md shadow-xl">
-                <span className="font-mono text-[10px] text-white/70 tracking-tight whitespace-nowrap">{undoToast}</span>
+              <div className="px-3 py-1.5 rounded-sm bg-foreground/90 border border-border backdrop-blur-md shadow-xl">
+                <span className="font-mono text-[10px] text-background tracking-tight whitespace-nowrap">{undoToast}</span>
               </div>
             </motion.div>
           )}
