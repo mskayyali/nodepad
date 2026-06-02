@@ -26,6 +26,7 @@ import {
   getPreset,
   fetchModelsFromProvider,
   type AISettings,
+  type AIModel,
   type AIProvider,
   type FetchedModel,
 } from "@/lib/ai-settings"
@@ -171,7 +172,33 @@ export function ProjectSidebar({
 
   const currentPreset = getPreset(draft.provider)
   const models = getModelsForProvider(draft.provider)
-  const selectedModel = models.find(m => m.id === draft.modelId) || models[0] || undefined
+
+  /** Convert a fetched model into the standard AIModel shape. */
+  const toAIModel = (fm: FetchedModel | undefined): AIModel | undefined =>
+    fm
+      ? {
+          id: fm.id,
+          label: fm.name || fm.id.split("/").pop() || fm.id,
+          shortLabel: fm.name || fm.id.split("/").pop() || fm.id,
+          description: fm.description || "Custom model",
+          supportsGrounding: false,
+        }
+      : undefined
+
+  /** Build a minimal AIModel for a raw model ID string. */
+  const customModel = (id: string): AIModel => ({
+    id,
+    label: id,
+    shortLabel: id.split("/").pop() || id,
+    description: "Custom model",
+    supportsGrounding: false,
+  })
+
+  const selectedModel =
+    models.find(m => m.id === draft.modelId) ??
+    toAIModel(fetchedModels.find(m => m.id === draft.modelId)) ??
+    (draft.modelId ? customModel(draft.modelId) : undefined) ??
+    models[0]
 
   return (
     <div
