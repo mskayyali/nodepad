@@ -468,8 +468,8 @@ export function GraphArea({
             dominantBaseline="central"
             fontSize={Math.max(11, 11 * tk)}
             fontFamily="monospace"
-            fill="white"
-            fillOpacity={Math.max(0, 0.06 - (nodesRef.current.length * 0.002))}
+            fill="var(--foreground)"
+            fillOpacity={Math.max(0, 0.05 - (nodesRef.current.length * 0.002))}
             style={{ pointerEvents: "none", userSelect: "none", letterSpacing: "0.08em" }}
           >
             {projectName.toUpperCase()}
@@ -498,7 +498,7 @@ export function GraphArea({
                   <path
                     key={i}
                     d={d}
-                    stroke="white"
+                    stroke="var(--foreground)"
                     strokeWidth={isSynth ? 0.5 : highlighted ? 2 : 1.2}
                     strokeDasharray={isSynth ? "3 7" : undefined}
                     strokeOpacity={
@@ -532,7 +532,7 @@ export function GraphArea({
                 const Icon   = config?.icon ?? null
                 const accent = config?.accentVar ?? "var(--type-thesis)"
 
-                const fill = node.isSynthesis ? "url(#synth-grad)" : (config?.accentVar ?? "white")
+                const fill = node.isSynthesis ? "url(#synth-grad)" : (config?.accentVar ?? "var(--foreground)")
 
                 // Short label: first 4 words, truncated at 22 chars
                 const labelWords = (node.block?.text ?? "").split(/\s+/).slice(0, 4).join(" ")
@@ -647,7 +647,7 @@ export function GraphArea({
                           xmlns="http://www.w3.org/1999/xhtml"
                           style={{ width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center" }}
                         >
-                          <Icon style={{ width: 19, height: 19, opacity: 0.92 }} />
+                          <Icon style={{ width: 19, height: 19, color: "var(--primary-foreground)", opacity: 0.92 }} />
                         </div>
                       </foreignObject>
                     )}
@@ -658,7 +658,7 @@ export function GraphArea({
                         textAnchor="middle"
                         dominantBaseline="central"
                         fontSize={13}
-                        fill="white"
+                        fill="var(--foreground)"
                         fillOpacity={0.9}
                         style={{ pointerEvents: "none" }}
                       >
