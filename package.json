@@ -4,8 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:with-local-models": "WITH_LOCAL_MODELS=true NEXT_PUBLIC_WITH_LOCAL_MODELS=true next dev",
     "build": "next build",
+    "build:with-local-models": "NEXT_PUBLIC_WITH_LOCAL_MODELS=true next build",
     "start": "next start",
+    "start:with-local-models": "WITH_LOCAL_MODELS=true next start",
     "lint": "eslint ."
   },
   "dependencies": {

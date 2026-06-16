@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { isLocalProvider, WITH_LOCAL_MODELS } from "./local-models"
 
 export interface AIModel {
   id: string
@@ -12,7 +13,7 @@ export interface AIModel {
   groundingModelId?: string
 }
 
-export type AIProvider = "openrouter" | "openai" | "zai"
+export type AIProvider = "openrouter" | "openai" | "zai" | "claude-cli"
 
 export interface AIProviderPreset {
   id: AIProvider
@@ -22,7 +23,7 @@ export interface AIProviderPreset {
   keyPlaceholder: string
 }
 
-export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
+const ALL_PROVIDER_PRESETS: AIProviderPreset[] = [
   {
     id: "openrouter",
     label: "OpenRouter",
@@ -44,7 +45,20 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     keyPlaceholder: "Your Z.ai API key",
   },
+  {
+    id: "claude-cli",
+    label: "Claude CLI",
+    baseUrl: "/api/claude-cli",
+    keyUrl: "",
+    keyPlaceholder: "",
+  },
 ]
+
+/** Providers available at runtime — local providers are excluded unless the
+ *  app was started/built with WITH_LOCAL_MODELS=true. */
+export const AI_PROVIDER_PRESETS: AIProviderPreset[] = ALL_PROVIDER_PRESETS.filter(
+  p => !isLocalProvider(p.id) || WITH_LOCAL_MODELS
+)
 
 export function getPreset(provider: AIProvider): AIProviderPreset {
   return AI_PROVIDER_PRESETS.find(p => p.id === provider) || AI_PROVIDER_PRESETS[0]
@@ -99,6 +113,30 @@ export const AI_MODELS: AIModel[] = [
     label: "Nemotron 120B · Free",
     shortLabel: "Nemotron",
     description: "Free · no credits · ~200 req/day · Nvidia-hosted · MoE",
+    supportsGrounding: false,
+  },
+]
+
+export const CLAUDE_CLI_MODELS: AIModel[] = [
+  {
+    id: "claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
+    shortLabel: "Sonnet",
+    description: "Latest Claude Sonnet — best balance of speed and quality",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-opus-4-6",
+    label: "Claude Opus 4.6",
+    shortLabel: "Opus",
+    description: "Most capable Claude model",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-haiku-4-5-20251001",
+    label: "Claude Haiku 4.5",
+    shortLabel: "Haiku",
+    description: "Fast and lightweight",
     supportsGrounding: false,
   },
 ]
@@ -177,6 +215,7 @@ export const ZAI_MODELS: AIModel[] = [
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
   if (provider === "openai") return OPENAI_MODELS
   if (provider === "zai")    return ZAI_MODELS
+  if (provider === "claude-cli") return CLAUDE_CLI_MODELS
   return AI_MODELS // openrouter + safe fallback for any stale localStorage value
 }
 
@@ -269,7 +308,7 @@ export interface AIConfig {
 
 export function loadAIConfig(): AIConfig | null {
   const s = loadSettings()
-  if (!s.apiKey) return null
+  if (!s.apiKey && s.provider !== "claude-cli") return null
   const models = getModelsForProvider(s.provider)
   const model = models.find(m => m.id === s.modelId)
   // Use the matched model's id if found; otherwise fall back to the first model
@@ -279,7 +318,7 @@ export function loadAIConfig(): AIConfig | null {
   const modelId = model?.id ?? models[0]?.id ?? s.modelId ?? DEFAULT_MODEL_ID
   // Z.ai does not support grounding; only openrouter and openai do
   const supportsGrounding =
-    (s.provider === "openrouter" || s.provider === "openai") &&
+    s.provider !== "claude-cli" &&
     s.webGrounding &&
     (model?.supportsGrounding ?? false)
   return { apiKey: s.apiKey, modelId, supportsGrounding, provider: s.provider, customBaseUrl: s.customBaseUrl }
@@ -291,6 +330,9 @@ export function getBaseUrl(config: AIConfig): string {
 }
 
 export function getProviderHeaders(config: AIConfig): Record<string, string> {
+  if (config.provider === "claude-cli") {
+    return { "Content-Type": "application/json" }
+  }
   const base: Record<string, string> = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${config.apiKey}`,
