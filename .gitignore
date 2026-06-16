@@ -15,5 +15,8 @@ node_modules/
 tsconfig.tsbuildinfo
 next-env.d.ts
 
+# Plugin build output
+plugin/dist/
+
 # Internal docs
 CLAUDE.md

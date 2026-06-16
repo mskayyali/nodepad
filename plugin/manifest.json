@@ -1,0 +1,10 @@
+{
+  "id": "nodepad",
+  "name": "Nodepad",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "A spatial research tool where AI augments your thinking",
+  "author": "David Emmanuel",
+  "authorUrl": "",
+  "isDesktopOnly": true
+}

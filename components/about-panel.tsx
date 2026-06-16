@@ -12,6 +12,7 @@ import { useModKey } from "@/lib/utils"
 interface AboutPanelProps {
   open: boolean
   onClose: () => void
+  container?: HTMLElement
 }
 
 function CopyEmailButton() {
@@ -94,12 +95,13 @@ const CONTENT_TYPE_HIGHLIGHTS = [
   "claim", "question", "idea", "task", "thesis", "quote", "entity", "reference"
 ] as const
 
-export function AboutPanel({ open, onClose }: AboutPanelProps) {
+export function AboutPanel({ open, onClose, container }: AboutPanelProps) {
   const mod = useModKey()
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose() }}>
       <SheetContent
         side="right"
+        container={container}
         className="w-full sm:max-w-2xl flex flex-col gap-0 p-0 bg-card border-l border-border z-[200] overflow-hidden"
       >
         <SheetTitle className="sr-only">About nodepad</SheetTitle>

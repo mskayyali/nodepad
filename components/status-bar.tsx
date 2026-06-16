@@ -22,6 +22,7 @@ interface StatusBarProps {
   modelLabel?: string
   showHelpTooltip?: boolean
   onHelpTooltipDismiss?: () => void
+  portalContainer?: HTMLElement
 }
 
 export function StatusBar({
@@ -38,6 +39,7 @@ export function StatusBar({
   modelLabel,
   showHelpTooltip,
   onHelpTooltipDismiss,
+  portalContainer,
 }: StatusBarProps) {
   const [time, setTime] = useState("")
   const [isAboutOpen, setIsAboutOpen] = useState(false)
@@ -230,7 +232,7 @@ export function StatusBar({
         </div>
       </div>
 
-      <AboutPanel open={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
+      <AboutPanel open={isAboutOpen} onClose={() => setIsAboutOpen(false)} container={portalContainer} />
     </header>
   )
 }
