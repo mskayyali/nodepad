@@ -12,7 +12,7 @@ export interface AIModel {
   groundingModelId?: string
 }
 
-export type AIProvider = "openrouter" | "openai" | "zai"
+export type AIProvider = "openrouter" | "openai" | "zai" | "anthropic"
 
 export interface AIProviderPreset {
   id: AIProvider
@@ -43,6 +43,13 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     baseUrl: "https://api.z.ai/api/paas/v4",
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     keyPlaceholder: "Your Z.ai API key",
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    baseUrl: "https://api.anthropic.com/v1",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+    keyPlaceholder: "sk-ant-api03-...",
   },
 ]
 
@@ -174,9 +181,76 @@ export const ZAI_MODELS: AIModel[] = [
   },
 ]
 
+export const ANTHROPIC_MODELS: AIModel[] = [
+  {
+    id: "claude-fable-5",
+    label: "Claude Fable 5",
+    shortLabel: "Fable 5",
+    description: "Next-gen intelligence for long-running agents",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-opus-4-8",
+    label: "Claude Opus 4.8",
+    shortLabel: "Opus 4.8",
+    description: "Complex agentic coding & enterprise work",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-sonnet-5",
+    label: "Claude Sonnet 5",
+    shortLabel: "Sonnet 5",
+    description: "Best balance of speed and intelligence",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-haiku-4-5",
+    label: "Claude Haiku 4.5",
+    shortLabel: "Haiku 4.5",
+    description: "Fastest model, near-frontier intelligence",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-opus-4-7",
+    label: "Claude Opus 4.7",
+    shortLabel: "Opus 4.7",
+    description: "Previous-gen Opus — adaptive thinking",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-opus-4-6",
+    label: "Claude Opus 4.6",
+    shortLabel: "Opus 4.6",
+    description: "Extended thinking, 1M context",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
+    shortLabel: "Sonnet 4.6",
+    description: "Extended thinking, 1M context",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-sonnet-4-5",
+    label: "Claude Sonnet 4.5",
+    shortLabel: "Sonnet 4.5",
+    description: "Extended thinking, 200K context",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-opus-4-5",
+    label: "Claude Opus 4.5",
+    shortLabel: "Opus 4.5",
+    description: "Extended thinking, 200K context",
+    supportsGrounding: false,
+  },
+]
+
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
   if (provider === "openai") return OPENAI_MODELS
   if (provider === "zai")    return ZAI_MODELS
+  if (provider === "anthropic") return ANTHROPIC_MODELS
   return AI_MODELS // openrouter + safe fallback for any stale localStorage value
 }
 
@@ -206,6 +280,10 @@ export async function fetchModelsFromProvider(
   if (provider === "openrouter") {
     headers["HTTP-Referer"] = "https://nodepad.space"
     headers["X-Title"] = "nodepad"
+  }
+  if (provider === "anthropic") {
+    headers["x-api-key"] = apiKey
+    headers["anthropic-version"] = "2023-06-01"
   }
   const res = await fetch(`${baseUrl}/models`, { headers })
   if (!res.ok) throw new Error(`Failed to fetch models (${res.status})`)
@@ -298,6 +376,10 @@ export function getProviderHeaders(config: AIConfig): Record<string, string> {
   if (config.provider === "openrouter") {
     base["HTTP-Referer"] = "https://nodepad.space"
     base["X-Title"] = "nodepad"
+  }
+  if (config.provider === "anthropic") {
+    base["x-api-key"] = config.apiKey
+    base["anthropic-version"] = "2023-06-01"
   }
   return base
 }
