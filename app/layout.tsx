@@ -16,6 +16,10 @@ const vazirmatn = Vazirmatn({
 export const metadata: Metadata = {
   title: 'nodepad',
   description: 'A spatial research tool where AI augments your thinking — not replaces it.',
+
+  manifest: '/site.webmanifest',
+  // manifest: '/manifest.json',
+
   icons: {
     icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
     apple: '/apple-icon.png',
