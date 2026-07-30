@@ -1,0 +1,33 @@
+# nodepad — single-container compose file.
+#
+# The app is stateless: all notes and AI keys live in the browser's
+# localStorage, so there is nothing to mount and nothing to back up server-side.
+#
+# Do NOT scale this service beyond 1 replica — proxy.ts uses an in-memory
+# rate limiter for /api/fetch-url that assumes a single process.
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nodepad:latest
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
