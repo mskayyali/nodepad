@@ -298,7 +298,9 @@ export async function enrichBlockClient(
     }
   }
 
-  const supportsJsonSchema = config.provider === "openrouter" || config.provider === "openai"
+  // Anthropic uses a different API format entirely — no response_format support
+  const isNativeAnthropic = config.provider === "anthropic"
+  const supportsJsonSchema = !isNativeAnthropic && (config.provider === "openrouter" || config.provider === "openai")
   // gpt-*-search-preview models have known issues with strict json_schema + web_search_options;
   // fall back to json_object mode (guaranteed valid JSON, no schema enforcement)
   const useStrictSchema = supportsJsonSchema && !webSearchOptions
@@ -366,29 +368,44 @@ You have live web access. For this note type, include 1–2 real source citation
   const MAX_ENRICH_OUTPUT_TOKENS = 1200
 
   const baseUrl = getBaseUrl(config)
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: getProviderHeaders(config),
-    body: JSON.stringify({
-      model,
-      max_tokens: MAX_ENRICH_OUTPUT_TOKENS,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user",   content: userMessage },
-      ],
-      // OpenAI search-preview models reject both response_format AND temperature;
-      // when web_search_options is present, omit both and rely on the schemaHint
-      // in the system prompt to get structured JSON output.
-      ...(webSearchOptions === undefined
-        ? {
-            response_format: useStrictSchema
-              ? { type: "json_schema", json_schema: JSON_SCHEMA }
-              : { type: "json_object" },
+  const response = isNativeAnthropic
+    ? await fetch("/api/anthropic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: config.apiKey,
+          body: {
+            model,
+            max_tokens: MAX_ENRICH_OUTPUT_TOKENS,
+            system: systemPrompt,
+            messages: [{ role: "user", content: userMessage }],
             temperature: 0.1,
-          }
-        : { web_search_options: webSearchOptions }),
-    }),
-  })
+          },
+        }),
+      })
+    : await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: getProviderHeaders(config),
+        body: JSON.stringify({
+          model,
+          max_tokens: MAX_ENRICH_OUTPUT_TOKENS,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user",   content: userMessage },
+          ],
+          // OpenAI search-preview models reject both response_format AND temperature;
+          // when web_search_options is present, omit both and rely on the schemaHint
+          // in the system prompt to get structured JSON output.
+          ...(webSearchOptions === undefined
+            ? {
+                response_format: useStrictSchema
+                  ? { type: "json_schema", json_schema: JSON_SCHEMA }
+                  : { type: "json_object" },
+                temperature: 0.1,
+              }
+            : { web_search_options: webSearchOptions }),
+        }),
+      })
 
   if (!response.ok) {
     throw new Error(await parseProviderError(response))
@@ -403,7 +420,9 @@ You have live web access. For this note type, include 1–2 real source citation
     )
   }
 
-  const content = (data.choices as Array<{ message?: { content?: string } }>)?.[0]?.message?.content
+  const content = isNativeAnthropic
+    ? (data.content as Array<{ type: string; text?: string }>)?.find(b => b.type === "text")?.text
+    : (data.choices as Array<{ message?: { content?: string } }>)?.[0]?.message?.content
   if (!content) throw new Error("No content in AI response")
 
   const result = parseEnrichResult(content)

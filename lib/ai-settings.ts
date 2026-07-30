@@ -12,7 +12,7 @@ export interface AIModel {
   groundingModelId?: string
 }
 
-export type AIProvider = "openrouter" | "openai" | "zai"
+export type AIProvider = "openrouter" | "openai" | "zai" | "anthropic"
 
 export interface AIProviderPreset {
   id: AIProvider
@@ -44,6 +44,13 @@ export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     keyPlaceholder: "Your Z.ai API key",
   },
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    baseUrl: "https://api.anthropic.com/v1",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+    keyPlaceholder: "sk-ant-...",
+  },
 ]
 
 export function getPreset(provider: AIProvider): AIProviderPreset {
@@ -56,6 +63,13 @@ export const AI_MODELS: AIModel[] = [
     label: "Claude Sonnet 4.5",
     shortLabel: "Claude",
     description: "Best reasoning & annotation quality",
+    supportsGrounding: false,
+  },
+  {
+    id: "anthropic/claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
+    shortLabel: "Claude",
+    description: "Latest Claude Sonnet",
     supportsGrounding: false,
   },
   {
@@ -174,9 +188,41 @@ export const ZAI_MODELS: AIModel[] = [
   },
 ]
 
+export const ANTHROPIC_MODELS: AIModel[] = [
+  {
+    id: "claude-opus-4-7",
+    label: "Claude Opus 4.7",
+    shortLabel: "Claude",
+    description: "Most capable Claude model",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
+    shortLabel: "Claude",
+    description: "Latest Claude Sonnet",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-sonnet-4-5",
+    label: "Claude Sonnet 4.5",
+    shortLabel: "Claude",
+    description: "Best reasoning & annotation quality",
+    supportsGrounding: false,
+  },
+  {
+    id: "claude-haiku-4-5-20251001",
+    label: "Claude Haiku 4.5",
+    shortLabel: "Claude",
+    description: "Fast and cost-efficient",
+    supportsGrounding: false,
+  },
+]
+
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
-  if (provider === "openai") return OPENAI_MODELS
-  if (provider === "zai")    return ZAI_MODELS
+  if (provider === "openai")     return OPENAI_MODELS
+  if (provider === "zai")        return ZAI_MODELS
+  if (provider === "anthropic")  return ANTHROPIC_MODELS
   return AI_MODELS // openrouter + safe fallback for any stale localStorage value
 }
 
@@ -291,6 +337,13 @@ export function getBaseUrl(config: AIConfig): string {
 }
 
 export function getProviderHeaders(config: AIConfig): Record<string, string> {
+  if (config.provider === "anthropic") {
+    return {
+      "Content-Type": "application/json",
+      "x-api-key": config.apiKey,
+      "anthropic-version": "2023-06-01",
+    }
+  }
   const base: Record<string, string> = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${config.apiKey}`,

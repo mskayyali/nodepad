@@ -21,6 +21,7 @@ export async function generateGhostClient(
   const config = loadAIConfig()
   if (!config) throw new Error("No API key configured")
 
+  const isNativeAnthropic = config.provider === "anthropic"
   // Ghost falls back to a lighter model if none is set
   const model = config.modelId || "google/gemini-2.0-flash-lite-001"
 
@@ -56,17 +57,31 @@ Return ONLY valid JSON:
   const MAX_GHOST_OUTPUT_TOKENS = 220
 
   const baseUrl = getBaseUrl(config)
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: getProviderHeaders(config),
-    body: JSON.stringify({
-      model,
-      max_tokens: MAX_GHOST_OUTPUT_TOKENS,
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-    }),
-  })
+  const response = isNativeAnthropic
+    ? await fetch("/api/anthropic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: config.apiKey,
+          body: {
+            model,
+            max_tokens: MAX_GHOST_OUTPUT_TOKENS,
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.7,
+          },
+        }),
+      })
+    : await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: getProviderHeaders(config),
+        body: JSON.stringify({
+          model,
+          max_tokens: MAX_GHOST_OUTPUT_TOKENS,
+          messages: [{ role: "user", content: prompt }],
+          response_format: { type: "json_object" },
+          temperature: 0.7,
+        }),
+      })
 
   if (!response.ok) {
     throw new Error(await parseProviderError(response))
@@ -80,7 +95,9 @@ Return ONLY valid JSON:
       `AI ghost error (${config.provider}): response was not valid JSON. The provider may have timed out or returned a truncated response.`
     )
   }
-  const rawContent = (data.choices as Array<{ message?: { content?: string } }>)?.[0]?.message?.content
+  const rawContent = isNativeAnthropic
+    ? (data.content as Array<{ type: string; text?: string }>)?.find(b => b.type === "text")?.text
+    : (data.choices as Array<{ message?: { content?: string } }>)?.[0]?.message?.content
   if (!rawContent) throw new Error("No content in AI response")
 
   // Defensive parse
